@@ -6,10 +6,15 @@ import type { WebSocketClient } from '../../services/websocket-client';
 import type { TerminalInfo } from '../../types';
 import '@xterm/xterm/css/xterm.css';
 import './TerminalPane.css';
+import { PaneToolbar } from '../grid/PaneToolbar';
 
 interface TerminalPaneProps {
   terminal: TerminalInfo;
   ws: WebSocketClient | null;
+  onSplitH?: () => void;
+  onSplitV?: () => void;
+  onMerge?: () => void;
+  canMerge?: boolean;
 }
 
 function getCellDimensions(xterm: Terminal): { width: number; height: number } | null {
@@ -43,7 +48,7 @@ function fitTerminal(xterm: Terminal, container: HTMLElement) {
 
 const FONT = { family: 'Menlo, Monaco, "Courier New", monospace', size: 13 };
 
-export function TerminalPane({ terminal, ws }: TerminalPaneProps) {
+export function TerminalPane({ terminal, ws, onSplitH, onSplitV, onMerge, canMerge }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
 
@@ -132,6 +137,15 @@ export function TerminalPane({ terminal, ws }: TerminalPaneProps) {
         <span className={`terminal-pane-status terminal-pane-status--${terminal.status}`}>
           {terminal.status}
         </span>
+        {onSplitH && onSplitV && (
+          <PaneToolbar
+            terminalId={terminal.id}
+            onSplitH={onSplitH}
+            onSplitV={onSplitV}
+            onMerge={onMerge ?? (() => {})}
+            canMerge={canMerge ?? false}
+          />
+        )}
       </div>
       <div className="terminal-pane-body" ref={containerRef} />
     </div>

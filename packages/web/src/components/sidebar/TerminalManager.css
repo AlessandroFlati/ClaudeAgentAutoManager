@@ -6,6 +6,7 @@
   flex-direction: column;
   padding: 12px;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .terminal-manager-title {
@@ -22,6 +23,7 @@
 
 .terminal-manager-input {
   flex: 1;
+  min-width: 0;
   padding: 4px 6px;
   background: #1e1e1e;
   border: 1px solid #444;
@@ -31,6 +33,7 @@
 }
 
 .terminal-manager-btn {
+  flex-shrink: 0;
   padding: 4px 10px;
   background: #0e639c;
   color: #fff;

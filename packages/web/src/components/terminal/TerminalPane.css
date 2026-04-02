@@ -41,17 +41,21 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  background: #1e1e1e;
 }
 
 /* Make xterm.js fill the body container */
 .terminal-pane-body .xterm {
   height: 100%;
+  width: 100%;
 }
 
 .terminal-pane-body .xterm-viewport {
   overflow-y: hidden !important;
+  width: 100% !important;
 }
 
 .terminal-pane-body .xterm-screen {
   height: 100% !important;
+  width: 100% !important;
 }

@@ -106,6 +106,7 @@ async function handleMessage(
       }
       session.write('\x03'); // Ctrl+C
       setTimeout(() => session.write('\x03'), 200); // Ctrl+C again
+      setTimeout(() => session.write('exit\n'), 500); // exit the shell
       break;
     }
 

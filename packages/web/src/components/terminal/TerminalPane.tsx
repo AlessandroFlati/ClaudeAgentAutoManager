@@ -41,8 +41,12 @@ export function TerminalPane({ terminal, ws }: TerminalPaneProps) {
       // WebGL not available, fall back to canvas (default in @xterm/xterm)
     }
 
-    fitAddon.fit();
     xtermRef.current = xterm;
+
+    // Defer fit() to next frame so the container has dimensions
+    requestAnimationFrame(() => {
+      try { fitAddon.fit(); } catch { /* container may not be ready */ }
+    });
 
     xterm.onData((data) => {
       ws?.send({

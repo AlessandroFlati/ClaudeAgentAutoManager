@@ -16,25 +16,47 @@
 }
 
 .terminal-manager-cwd {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
-.terminal-manager-cwd .terminal-manager-input {
-  width: 100%;
+.terminal-manager-cwd-row {
+  display: flex;
+  gap: 4px;
   margin-top: 4px;
+}
+
+.terminal-manager-cwd-row .terminal-manager-input {
+  flex: 1;
 }
 
 .terminal-manager-label {
   font-size: 11px;
-  color: var(--secondary, #7d8590);
+  color: #7d8590;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.terminal-manager-error {
+  font-size: 11px;
+  color: #f85149;
+  margin-top: 4px;
+}
+
+.terminal-manager-success {
+  font-size: 11px;
+  color: #4ade80;
+  margin-top: 4px;
 }
 
 .terminal-manager-spawn {
   display: flex;
   gap: 4px;
   margin-bottom: 12px;
+}
+
+.terminal-manager-spawn--disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .terminal-manager-input {
@@ -48,6 +70,15 @@
   font-size: 12px;
 }
 
+.terminal-manager-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.terminal-manager-input--error {
+  border-color: #f85149;
+}
+
 .terminal-manager-btn {
   flex-shrink: 0;
   padding: 4px 10px;
@@ -59,8 +90,21 @@
   font-size: 12px;
 }
 
-.terminal-manager-btn:hover {
+.terminal-manager-btn:hover:not(:disabled) {
   background: #1177bb;
+}
+
+.terminal-manager-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.terminal-manager-btn--secondary {
+  background: #3c3c3c;
+}
+
+.terminal-manager-btn--secondary:hover:not(:disabled) {
+  background: #505050;
 }
 
 .terminal-manager-list {

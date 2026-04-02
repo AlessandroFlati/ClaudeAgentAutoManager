@@ -6,6 +6,7 @@ export class WebSocketClient {
   private ws: WebSocket | null = null;
   private handlers = new Set<MessageHandler>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private intentionalClose = false;
   private readonly url: string;
 
   constructor(url: string) {
@@ -13,6 +14,7 @@ export class WebSocketClient {
   }
 
   connect(): void {
+    this.intentionalClose = false;
     this.ws = new WebSocket(this.url);
 
     this.ws.onopen = () => {
@@ -28,18 +30,21 @@ export class WebSocketClient {
     };
 
     this.ws.onclose = () => {
+      if (this.intentionalClose) return;
       console.log('WebSocket disconnected, reconnecting in 2s...');
       this.reconnectTimer = setTimeout(() => this.connect(), 2000);
     };
 
-    this.ws.onerror = (err) => {
-      console.error('WebSocket error:', err);
+    this.ws.onerror = () => {
+      // Error details are not useful from browser WebSocket API
     };
   }
 
   disconnect(): void {
+    this.intentionalClose = true;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
     this.ws?.close();
     this.ws = null;

@@ -1,14 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { WebSocketClient } from './services/websocket-client';
 import { initTerminalStore, useTerminals } from './stores/terminal-store';
-import { TerminalGrid } from './components/grid/TerminalGrid';
+import { SplitLayout } from './components/grid/SplitLayout';
+import { LayoutPresets } from './components/grid/LayoutPresets';
 import { TerminalManager } from './components/sidebar/TerminalManager';
+import { type LayoutNode, createPreset, assignTerminals, splitLeaf, mergePane } from './components/grid/split-tree';
 
 const wsUrl = `ws://${window.location.hostname}:${window.location.port}/ws`;
 
 export function App() {
   const wsRef = useRef<WebSocketClient | null>(null);
   const terminals = useTerminals();
+  const [layout, setLayout] = useState<LayoutNode>({ type: 'leaf', terminalId: null });
+  const [activePreset, setActivePreset] = useState<string | null>('1x1');
+  const [cwd, setCwd] = useState<string | null>(null);
 
   useEffect(() => {
     const ws = new WebSocketClient(wsUrl);
@@ -21,17 +26,134 @@ export function App() {
     };
   }, []);
 
+  const terminalMap = new Map(terminals.map(t => [t.id, t]));
+
+  function handlePresetSelect(label: string, cols: number, rows: number) {
+    const tree = createPreset(cols, rows);
+    const terminalIds = terminals.map(t => t.id);
+    setLayout(assignTerminals(tree, terminalIds));
+    setActivePreset(label);
+  }
+
+  function handleSpawn(name: string, spawnCwd: string) {
+    setCwd(spawnCwd);
+    wsRef.current?.send({ type: 'terminal:spawn', name, cwd: spawnCwd });
+  }
+
+  function handleSpawnInSlot(_leafPath: string) {
+    if (!cwd) return;
+    const name = `agent-${terminals.length + 1}`;
+    wsRef.current?.send({ type: 'terminal:spawn', name, cwd });
+  }
+
+  function handleKill(id: string) {
+    wsRef.current?.send({ type: 'terminal:kill', terminalId: id });
+  }
+
+  function handleSplitH(terminalId: string) {
+    setLayout(prev => splitLeaf(prev, terminalId, 'horizontal'));
+    setActivePreset(null);
+  }
+
+  function handleSplitV(terminalId: string) {
+    setLayout(prev => splitLeaf(prev, terminalId, 'vertical'));
+    setActivePreset(null);
+  }
+
+  function handleMerge(terminalId: string) {
+    setLayout(prev => mergePane(prev, terminalId));
+    setActivePreset(null);
+  }
+
+  // When a new terminal is created, assign it to the first empty slot
+  useEffect(() => {
+    setLayout(prev => {
+      const assignedIds = new Set<string>();
+      function collectAssigned(node: LayoutNode) {
+        if (node.type === 'leaf' && node.terminalId) assignedIds.add(node.terminalId);
+        if (node.type === 'split') { node.children.forEach(collectAssigned); }
+      }
+      collectAssigned(prev);
+
+      const unassigned = terminals.filter(t => !assignedIds.has(t.id));
+      if (unassigned.length === 0) return prev;
+
+      let tree = prev;
+      for (const t of unassigned) {
+        let placed = false;
+        function placeInEmpty(node: LayoutNode): LayoutNode {
+          if (placed) return node;
+          if (node.type === 'leaf' && node.terminalId === null) {
+            placed = true;
+            return { type: 'leaf', terminalId: t.id };
+          }
+          if (node.type === 'split') {
+            return {
+              type: 'split', direction: node.direction, ratio: node.ratio,
+              children: [placeInEmpty(node.children[0]), placeInEmpty(node.children[1])],
+            };
+          }
+          return node;
+        }
+        tree = placeInEmpty(tree);
+        if (!placed) {
+          function findLastTerminalId(node: LayoutNode): string | null {
+            if (node.type === 'leaf') return node.terminalId;
+            return findLastTerminalId(node.children[1]) ?? findLastTerminalId(node.children[0]);
+          }
+          const lastId = findLastTerminalId(tree);
+          if (lastId) {
+            tree = splitLeaf(tree, lastId, 'horizontal');
+            placed = false;
+            tree = placeInEmpty(tree);
+          }
+        }
+      }
+      return tree;
+    });
+  }, [terminals]);
+
+  // Remove exited terminals from layout
+  useEffect(() => {
+    const activeIds = new Set(terminals.map(t => t.id));
+    setLayout(prev => {
+      function clean(node: LayoutNode): LayoutNode {
+        if (node.type === 'leaf') {
+          if (node.terminalId && !activeIds.has(node.terminalId)) {
+            return { type: 'leaf', terminalId: null };
+          }
+          return node;
+        }
+        return {
+          type: 'split', direction: node.direction, ratio: node.ratio,
+          children: [clean(node.children[0]), clean(node.children[1])],
+        };
+      }
+      return clean(prev);
+    });
+  }, [terminals]);
+
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#1e1e1e', color: '#fff' }}>
       <TerminalManager
         terminals={terminals}
-        onSpawn={(name: string, cwd: string) => wsRef.current?.send({ type: 'terminal:spawn', name, cwd })}
-        onKill={(id) => wsRef.current?.send({ type: 'terminal:kill', terminalId: id })}
+        onSpawn={handleSpawn}
+        onKill={handleKill}
       />
-      <TerminalGrid
-        terminals={terminals}
-        ws={wsRef.current}
-      />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '6px 8px', background: '#252525', borderBottom: '1px solid #333' }}>
+          <LayoutPresets activePreset={activePreset} onSelect={handlePresetSelect} />
+        </div>
+        <SplitLayout
+          layout={layout}
+          terminals={terminalMap}
+          ws={wsRef.current}
+          onSpawnInSlot={handleSpawnInSlot}
+          onSplitH={handleSplitH}
+          onSplitV={handleSplitV}
+          onMerge={handleMerge}
+        />
+      </div>
     </div>
   );
 }

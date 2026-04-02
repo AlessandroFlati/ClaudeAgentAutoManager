@@ -1,7 +1,6 @@
 interface LayoutPresetsProps {
-  selectedCols: number;
-  selectedRows: number;
-  onSelect: (cols: number, rows: number) => void;
+  activePreset: string | null;
+  onSelect: (label: string, cols: number, rows: number) => void;
 }
 
 const PRESETS = [
@@ -12,15 +11,15 @@ const PRESETS = [
   { label: '3x3', cols: 3, rows: 3 },
 ];
 
-export function LayoutPresets({ selectedCols, selectedRows, onSelect }: LayoutPresetsProps) {
+export function LayoutPresets({ activePreset, onSelect }: LayoutPresetsProps) {
   return (
     <div style={{ display: 'flex', gap: 4 }}>
       {PRESETS.map((p) => {
-        const isActive = p.cols === selectedCols && p.rows === selectedRows;
+        const isActive = p.label === activePreset;
         return (
           <button
             key={p.label}
-            onClick={() => onSelect(p.cols, p.rows)}
+            onClick={() => onSelect(p.label, p.cols, p.rows)}
             style={{
               padding: '4px 8px',
               background: isActive ? '#0e639c' : '#3c3c3c',

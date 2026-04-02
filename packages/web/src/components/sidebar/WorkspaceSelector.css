@@ -1,0 +1,139 @@
+.workspace-selector {
+  margin-bottom: 12px;
+}
+
+.workspace-selector-label {
+  font-size: 11px;
+  color: #7d8590;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.workspace-selector-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0;
+}
+
+.workspace-selector-recent-item {
+  text-align: left;
+  padding: 4px 6px;
+  background: #1e1e1e;
+  color: #ccc;
+  border: 1px solid #333;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-selector-recent-item:hover {
+  border-color: #0e639c;
+  color: #fff;
+}
+
+.workspace-selector-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.workspace-selector-autocomplete {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.workspace-selector-input {
+  width: 100%;
+  padding: 4px 6px;
+  background: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 3px;
+  color: #ccc;
+  font-size: 12px;
+}
+
+.workspace-selector-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.workspace-selector-input--error {
+  border-color: #f85149;
+}
+
+.workspace-selector-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  list-style: none;
+  padding: 0;
+  margin: 2px 0 0 0;
+  background: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 3px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.workspace-selector-suggestion {
+  padding: 4px 6px;
+  font-size: 12px;
+  color: #ccc;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-selector-suggestion:hover,
+.workspace-selector-suggestion--selected {
+  background: #0e639c;
+  color: #fff;
+}
+
+.workspace-selector-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  background: #0e639c;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.workspace-selector-btn:hover:not(:disabled) {
+  background: #1177bb;
+}
+
+.workspace-selector-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.workspace-selector-btn--secondary {
+  background: #3c3c3c;
+}
+
+.workspace-selector-btn--secondary:hover:not(:disabled) {
+  background: #505050;
+}
+
+.workspace-selector-error {
+  font-size: 11px;
+  color: #f85149;
+  margin-top: 4px;
+}
+
+.workspace-selector-success {
+  font-size: 11px;
+  color: #4ade80;
+  margin-top: 4px;
+}

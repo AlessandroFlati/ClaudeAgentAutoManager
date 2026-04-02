@@ -43,9 +43,20 @@ export function TerminalPane({ terminal, ws }: TerminalPaneProps) {
 
     xtermRef.current = xterm;
 
-    // Defer fit() to next frame so the container has dimensions
+    // Defer fit() to next frame so the container has dimensions.
+    // Always send an explicit resize after fit, because onResize only fires
+    // when dimensions actually change -- if the default matches, it won't fire,
+    // and the server needs the first resize to start pipe-pane + launch the command.
     requestAnimationFrame(() => {
-      try { fitAddon.fit(); } catch { /* container may not be ready */ }
+      try {
+        fitAddon.fit();
+        ws?.send({
+          type: 'terminal:resize',
+          terminalId: terminal.id,
+          cols: xterm.cols,
+          rows: xterm.rows,
+        });
+      } catch { /* container may not be ready */ }
     });
 
     xterm.onData((data) => {

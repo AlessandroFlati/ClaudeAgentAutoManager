@@ -33,26 +33,21 @@ export function TerminalPane({ terminal, ws }: TerminalPaneProps) {
     const fitAddon = new FitAddon();
     xterm.loadAddon(fitAddon);
     xterm.open(containerRef.current);
-
-    // Use WebGL renderer for proper rendering
-    try {
-      xterm.loadAddon(new WebglAddon());
-    } catch {
-      // WebGL not available, fall back to canvas (default in @xterm/xterm)
-    }
-
     xtermRef.current = xterm;
 
-    // Defer fit() to allow the grid layout to settle, then fit + send
-    // resize and subscribe. Two rAF calls ensure layout is complete.
+    // Fit + init after layout settles. Load WebGL AFTER first fit
+    // because WebGL addon interferes with FitAddon's cell measurement.
     const sendInitial = () => {
       try {
-        const body = containerRef.current;
-        if (body) {
-          console.log('FitAddon container:', body.clientWidth, 'x', body.clientHeight, 'parent:', body.parentElement?.clientWidth);
-        }
         fitAddon.fit();
-        console.log('FitAddon result:', xterm.cols, 'x', xterm.rows);
+
+        // Load WebGL after initial fit
+        try {
+          xterm.loadAddon(new WebglAddon());
+        } catch {
+          // WebGL not available, canvas renderer is fine
+        }
+
         ws?.send({
           type: 'terminal:resize',
           terminalId: terminal.id,
@@ -65,7 +60,6 @@ export function TerminalPane({ terminal, ws }: TerminalPaneProps) {
         });
       } catch { /* container may not be ready */ }
     };
-    // Use setTimeout to ensure grid layout is fully settled before measuring
     setTimeout(sendInitial, 100);
 
     xterm.onData((data) => {

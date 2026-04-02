@@ -4,8 +4,8 @@
   "scripts": {
     "dev": "tsx watch src/app.ts",
     "build": "tsc",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --fileParallelism=false",
+    "test:watch": "vitest --fileParallelism=false"
   },
   "dependencies": {
     "express": "^4.21.0",

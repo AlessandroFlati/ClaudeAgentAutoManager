@@ -25,8 +25,46 @@
   margin-top: 4px;
 }
 
-.terminal-manager-cwd-row .terminal-manager-input {
+.terminal-manager-autocomplete {
   flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.terminal-manager-autocomplete .terminal-manager-input {
+  width: 100%;
+}
+
+.terminal-manager-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  list-style: none;
+  padding: 0;
+  margin: 2px 0 0 0;
+  background: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 3px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.terminal-manager-suggestion {
+  padding: 4px 6px;
+  font-size: 12px;
+  color: #ccc;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terminal-manager-suggestion:hover,
+.terminal-manager-suggestion--selected {
+  background: #0e639c;
+  color: #fff;
 }
 
 .terminal-manager-label {

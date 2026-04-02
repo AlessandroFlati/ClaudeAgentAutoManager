@@ -1,5 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs';
+import path from 'node:path';
 import express from 'express';
 import { TmuxManager } from './modules/terminal/tmux-manager.js';
 import { TerminalRegistry } from './modules/terminal/terminal-registry.js';
@@ -37,6 +38,36 @@ app.post('/api/validate-path', (req, res) => {
     res.json({ valid: true });
   } catch {
     res.json({ valid: false, error: 'Path does not exist' });
+  }
+});
+
+app.get('/api/list-dirs', (req, res) => {
+  const prefix = (req.query.prefix as string) || '';
+  if (!prefix) {
+    res.json([]);
+    return;
+  }
+  try {
+    // If prefix ends with /, list contents of that directory
+    // Otherwise, list parent directory filtered by the basename prefix
+    let dirToRead: string;
+    let filter: string;
+    if (prefix.endsWith('/') || prefix.endsWith('\\')) {
+      dirToRead = prefix;
+      filter = '';
+    } else {
+      dirToRead = path.dirname(prefix);
+      filter = path.basename(prefix).toLowerCase();
+    }
+    const entries = fs.readdirSync(dirToRead, { withFileTypes: true });
+    const dirs = entries
+      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+      .filter(e => !filter || e.name.toLowerCase().startsWith(filter))
+      .slice(0, 20)
+      .map(e => path.join(dirToRead, e.name));
+    res.json(dirs);
+  } catch {
+    res.json([]);
   }
 });
 

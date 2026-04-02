@@ -13,4 +13,11 @@
 
 .terminal-grid-layout {
   flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* react-grid-layout sets position/size on these divs; ensure children fill them */
+.terminal-grid-layout > div {
+  overflow: hidden;
 }

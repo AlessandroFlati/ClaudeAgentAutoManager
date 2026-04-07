@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { WebSocketClient } from './services/websocket-client';
 import { initTerminalStore, useTerminals } from './stores/terminal-store';
 import { SplitLayout } from './components/grid/SplitLayout';
-import { LayoutPresets } from './components/grid/LayoutPresets';
 import { TerminalManager } from './components/sidebar/TerminalManager';
 import { type LayoutNode, createPreset, assignTerminals, splitLeaf, mergePane } from './components/grid/split-tree';
 
@@ -12,7 +11,6 @@ export function App() {
   const wsRef = useRef<WebSocketClient | null>(null);
   const terminals = useTerminals();
   const [layout, setLayout] = useState<LayoutNode>({ type: 'leaf', terminalId: null });
-  const [activePreset, setActivePreset] = useState<string | null>('1x1');
   const [cwd, setCwd] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,11 +26,10 @@ export function App() {
 
   const terminalMap = new Map(terminals.map(t => [t.id, t]));
 
-  function handlePresetSelect(label: string, cols: number, rows: number) {
+  function handlePresetSelect(_label: string, cols: number, rows: number) {
     const tree = createPreset(cols, rows);
     const terminalIds = terminals.map(t => t.id);
     setLayout(assignTerminals(tree, terminalIds));
-    setActivePreset(label);
   }
 
   function handleSpawn(name: string, spawnCwd: string) {
@@ -52,17 +49,14 @@ export function App() {
 
   function handleSplitH(terminalId: string) {
     setLayout(prev => splitLeaf(prev, terminalId, 'horizontal'));
-    setActivePreset(null);
   }
 
   function handleSplitV(terminalId: string) {
     setLayout(prev => splitLeaf(prev, terminalId, 'vertical'));
-    setActivePreset(null);
   }
 
   function handleMerge(terminalId: string) {
     setLayout(prev => mergePane(prev, terminalId));
-    setActivePreset(null);
   }
 
   // When a new terminal is created, assign it to the first empty slot
@@ -134,26 +128,22 @@ export function App() {
   }, [terminals]);
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#1e1e1e', color: '#fff' }}>
+    <div style={{ display: 'flex', height: '100vh', background: 'var(--color-bg)', color: 'var(--color-text-primary)', fontFamily: 'var(--font-ui)' }}>
       <TerminalManager
         terminals={terminals}
         onSpawn={handleSpawn}
         onKill={handleKill}
+        onPresetSelect={handlePresetSelect}
       />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '6px 8px', background: '#252525', borderBottom: '1px solid #333' }}>
-          <LayoutPresets activePreset={activePreset} onSelect={handlePresetSelect} />
-        </div>
-        <SplitLayout
-          layout={layout}
-          terminals={terminalMap}
-          ws={wsRef.current}
-          onSpawnInSlot={handleSpawnInSlot}
-          onSplitH={handleSplitH}
-          onSplitV={handleSplitV}
-          onMerge={handleMerge}
-        />
-      </div>
+      <SplitLayout
+        layout={layout}
+        terminals={terminalMap}
+        ws={wsRef.current}
+        onSpawnInSlot={handleSpawnInSlot}
+        onSplitH={handleSplitH}
+        onSplitV={handleSplitV}
+        onMerge={handleMerge}
+      />
     </div>
   );
 }

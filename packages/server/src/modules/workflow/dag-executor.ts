@@ -108,7 +108,9 @@ export class DagExecutor {
 
     this.buildNodeGraph();
 
-    this.signalWatcher.start(this.workspacePath, (signal, filename) => {
+    // Watch the actual run signals directory (not through symlink — chokidar may not follow junctions on Windows)
+    const runSignalsDir = path.join(this.workspacePath, '.caam', 'runs', this.runId, 'signals');
+    this.signalWatcher.startDir(runSignalsDir, (signal, filename) => {
       this.handleSignal(signal, filename);
     });
 
@@ -359,12 +361,19 @@ export class DagExecutor {
       purpose,
     });
 
-    // Inject purpose prompt after shell starts
+    // Trigger deferred command by sending initial resize
+    // (normally xterm.js does this, but workflow agents may have no UI client)
     const session = this.registry.get(info.id);
     if (session) {
+      await session.resize(120, 30);
+
+      // Subscribe to output so the session stays alive
+      session.onData(() => {});
+
+      // Inject purpose prompt after Claude Code has time to start
       setTimeout(() => {
         session.write(this.bootstrap.getInjectionPrompt(agentName));
-      }, 2000);
+      }, 5000);
     }
 
     // Attach log capture for terminal output

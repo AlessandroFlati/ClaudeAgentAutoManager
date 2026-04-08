@@ -14,15 +14,23 @@ export class SignalWatcher {
   private onError: ErrorCallback | null = null;
 
   start(workspacePath: string, onSignal: SignalCallback): void {
-    this.stop();
     const signalsDir = path.join(workspacePath, '.caam', 'shared', 'signals');
+    this.startDir(signalsDir, onSignal);
+  }
+
+  startDir(signalsDir: string, onSignal: SignalCallback): void {
+    this.stop();
 
     this.watcher = chokidar.watch(path.join(signalsDir, '*.done.json'), {
-      ignoreInitial: true,
+      ignoreInitial: false,
       awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
     });
 
     this.watcher.on('add', async (filepath: string) => {
+      await this.handleSignalFile(filepath, onSignal);
+    });
+
+    this.watcher.on('change', async (filepath: string) => {
       await this.handleSignalFile(filepath, onSignal);
     });
   }

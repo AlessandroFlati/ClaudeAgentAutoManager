@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { WebSocketClient } from '../../services/websocket-client';
 import type { ServerMessage, InputManifest, DataSource } from '../../types';
+import { SourceModal } from './SourceModal';
 import './WorkflowPanel.css';
 
 export interface WorkflowNode {
@@ -78,16 +79,30 @@ export function useWorkflowState(ws: WebSocketClient | null): [WorkflowState, (s
   return [state, update];
 }
 
-interface WorkspaceFile {
-  name: string;
-  size: number;
+function sourceLabel(src: DataSource): string {
+  switch (src.type) {
+    case 'local_file': return (src as Record<string, unknown>).path as string || 'Local file';
+    case 'url': return (src as Record<string, unknown>).url as string || 'URL';
+    case 'glob': return (src as Record<string, unknown>).pattern as string || 'Glob';
+    case 'postgres': return 'PostgreSQL' + ((src as Record<string, unknown>).query ? ' (query)' : ' (discovery)');
+    case 'mysql': return 'MySQL' + ((src as Record<string, unknown>).query ? ' (query)' : ' (discovery)');
+    case 'sqlite': return (src as Record<string, unknown>).path as string || 'SQLite';
+    case 'bigquery': return `BigQuery: ${(src as Record<string, unknown>).dataset || ''}`;
+    case 'snowflake': return `Snowflake: ${(src as Record<string, unknown>).database || ''}`;
+    case 'mongo': return `MongoDB: ${(src as Record<string, unknown>).database || ''}`;
+    case 's3': return `S3: ${(src as Record<string, unknown>).bucket || ''}`;
+    case 'rest_api': return (src as Record<string, unknown>).base_url as string || 'REST API';
+    case 'google_sheets': return 'Google Sheets';
+    case 'inline': return 'Inline data';
+    default: return src.type;
+  }
 }
 
 export function WorkflowPanel({ ws, workspacePath, workflowState, onStateChange }: WorkflowPanelProps) {
   const [workflowFiles, setWorkflowFiles] = useState<string[]>([]);
   const [sources, setSources] = useState<DataSource[]>([]);
   const [description, setDescription] = useState('');
-  const [wsFiles, setWsFiles] = useState<WorkspaceFile[]>([]);
+  const [showSourceModal, setShowSourceModal] = useState(false);
   const { yaml, runId, summary, error } = workflowState;
 
   useEffect(() => {
@@ -96,30 +111,6 @@ export function WorkflowPanel({ ws, workspacePath, workflowState, onStateChange 
       .then(setWorkflowFiles)
       .catch(() => {});
   }, []);
-
-  // Load workspace files for source picker
-  useEffect(() => {
-    if (!workspacePath) return;
-    fetch(`/api/list-files?dir=${encodeURIComponent(workspacePath)}&extensions=csv,tsv,json,jsonl,parquet,xlsx,xls,db`)
-      .then(r => r.json())
-      .then((data: { files: WorkspaceFile[] }) => setWsFiles(data.files))
-      .catch(() => {});
-  }, [workspacePath]);
-
-  function addSource(fileName: string) {
-    setSources(prev => [...prev, {
-      type: 'local_file' as const,
-      path: fileName,
-      format: 'auto' as const,
-      sheet: null,
-      encoding: null,
-      delimiter: null,
-    }]);
-  }
-
-  function removeSource(index: number) {
-    setSources(prev => prev.filter((_, i) => i !== index));
-  }
 
   function handleStart() {
     if (!ws || !workspacePath || !yaml.trim()) return;
@@ -185,24 +176,20 @@ export function WorkflowPanel({ ws, workspacePath, workflowState, onStateChange 
 
       {sources.map((src, i) => (
         <div key={i} className="workflow-panel-source">
-          <span className="workflow-panel-source-name">
-            {src.type === 'local_file' ? src.path : src.type}
-          </span>
-          <button className="workflow-panel-source-remove" onClick={() => removeSource(i)} disabled={!!isRunning}>x</button>
+          <span className="workflow-panel-source-type">{src.type}</span>
+          <span className="workflow-panel-source-name">{sourceLabel(src)}</span>
+          <button className="workflow-panel-source-remove" onClick={() => setSources(prev => prev.filter((_, j) => j !== i))} disabled={!!isRunning}>x</button>
         </div>
       ))}
 
-      {wsFiles.length > 0 && !isRunning && (
-        <select
-          className="workflow-panel-select"
-          onChange={(e) => { if (e.target.value) addSource(e.target.value); e.target.value = ''; }}
-          defaultValue=""
+      {!isRunning && (
+        <button
+          className="workflow-panel-btn"
+          onClick={() => setShowSourceModal(true)}
+          style={{ width: '100%' }}
         >
-          <option value="">+ Add data file...</option>
-          {wsFiles.map(f => (
-            <option key={f.name} value={f.name}>{f.name} ({(f.size / 1024).toFixed(0)} KB)</option>
-          ))}
-        </select>
+          + Add Source
+        </button>
       )}
 
       <input
@@ -238,6 +225,14 @@ export function WorkflowPanel({ ws, workspacePath, workflowState, onStateChange 
           {summary.completed} completed, {summary.failed} failed, {summary.skipped} skipped
           &mdash; {Math.round(summary.duration_seconds)}s
         </div>
+      )}
+
+      {showSourceModal && (
+        <SourceModal
+          onAdd={(src) => setSources(prev => [...prev, src])}
+          onClose={() => setShowSourceModal(false)}
+          workspacePath={workspacePath}
+        />
       )}
     </div>
   );

@@ -180,6 +180,14 @@
   border-radius: var(--radius-sm, 4px);
 }
 
+.workflow-panel-source-type {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-accent, #007acc);
+  flex-shrink: 0;
+}
+
 .workflow-panel-source-name {
   flex: 1;
   overflow: hidden;

@@ -52,7 +52,15 @@ export async function validateSignalOutputs(
   const errors: ValidationResult['errors'] = [];
 
   for (const output of signal.outputs) {
-    const fullPath = path.join(workspacePath, '.caam', output.path);
+    // Normalize the output path: agents may write paths with or without .caam/ prefix
+    let outputPath = output.path.replace(/\\/g, '/');
+    if (outputPath.startsWith('.caam/')) {
+      outputPath = outputPath.slice(6); // Remove .caam/ prefix
+    }
+    if (outputPath.startsWith('shared/')) {
+      // shared/ is a symlink to the run dir — resolve from workspace
+    }
+    const fullPath = path.join(workspacePath, '.caam', outputPath);
 
     if (!await fileExists(fullPath)) {
       errors.push({ path: output.path, issue: 'missing', expected: 'exists', actual: null });

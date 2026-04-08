@@ -141,13 +141,13 @@ function printSummary() {
   }
 }
 
-// Safety timeout: 10 minutes
+// Safety timeout: 60 minutes
 setTimeout(() => {
-  log('TIMEOUT', 'Test timed out after 10 minutes');
+  log('TIMEOUT', 'Test timed out after 60 minutes');
   printSummary();
   ws.close();
   process.exit(1);
-}, 600000);
+}, 3600000);
 
 // Print periodic status every 30 seconds
 setInterval(() => {

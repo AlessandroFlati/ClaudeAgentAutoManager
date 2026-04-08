@@ -268,11 +268,25 @@ export class DagExecutor {
     const purpose = generatePurpose(node, this.workflowConfig, presetContent, testBudgetInfo);
 
     const agentName = node.scope ? `${node.name}-${node.scope}` : node.name;
+
+    // Create agent files (.caam/agents/<name>/purpose.md + inbox.md)
+    this.bootstrap.setCwd(this.workspacePath);
+    this.bootstrap.createAgentFiles(agentName, purpose);
+    this.bootstrap.regenerateAgentsList(this.registry.listWithPurpose());
+
     const info = await this.registry.spawn({
       name: agentName,
       cwd: this.workspacePath,
       purpose,
     });
+
+    // Inject purpose prompt after shell starts
+    const session = this.registry.get(info.id);
+    if (session) {
+      setTimeout(() => {
+        session.write(this.bootstrap.getInjectionPrompt(agentName));
+      }, 2000);
+    }
 
     node.terminalId = info.id;
     node.startedAt = Date.now();

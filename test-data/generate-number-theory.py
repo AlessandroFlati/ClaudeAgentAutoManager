@@ -41,10 +41,10 @@ for n in range(1, N + 1):
         'is_even': n % 2 == 0,
         'n_mod_3': n % 3,
         'n_mod_6': n % 6,
-        'num_divisors': divisor_count(n),
+        'num_divisors': int(divisor_count(n)),
         'sum_of_divisors': int(divisor_sigma(n)),
         'euler_totient': int(totient(n)),
-        'largest_prime_factor': max(factors.keys()) if factors else 1,
+        'largest_prime_factor': int(max(factors.keys())) if factors else 1,
         'digit_count': len(str(n)),
         'digit_sum': digit_sum(n),
         'is_perfect_square': int(math.isqrt(n)) ** 2 == n,
@@ -54,8 +54,8 @@ for n in range(1, N + 1):
         'prime_counting': int(primepi(n)),
         'is_palindrome': is_palindrome(n),
         'mobius': int(mobius(n)),
-        'omega': len(factors),
-        'bigomega': sum(factors.values()),
+        'omega': int(len(factors)),
+        'bigomega': int(sum(factors.values())),
         'decade': n // 1000,
     })
     if n % 1000 == 0:

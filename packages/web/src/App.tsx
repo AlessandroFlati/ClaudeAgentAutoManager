@@ -10,6 +10,7 @@ const wsUrl = `ws://${window.location.hostname}:${window.location.port}/ws`;
 
 export function App() {
   const wsRef = useRef<WebSocketClient | null>(null);
+  const [wsReady, setWsReady] = useState(false);
   const terminals = useTerminals();
   const [layout, setLayout] = useState<LayoutNode>({ type: 'leaf', terminalId: null });
   const [cwd, setCwd] = useState<string | null>(null);
@@ -18,11 +19,13 @@ export function App() {
   useEffect(() => {
     const ws = new WebSocketClient(wsUrl);
     wsRef.current = ws;
+    setWsReady(true);
     const unsub = initTerminalStore(ws);
     ws.connect();
     return () => {
       unsub();
       ws.disconnect();
+      setWsReady(false);
     };
   }, []);
 

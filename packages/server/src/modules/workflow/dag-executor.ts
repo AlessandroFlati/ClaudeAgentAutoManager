@@ -488,8 +488,30 @@ export class DagExecutor {
   }
 
   private async postCompletion(node: DagNode): Promise<void> {
-    if (node.signal?.status === 'branch' && node.signal.decision) {
+    // Check for branch decision — either explicit branch status or success with decision
+    const decision = node.signal?.decision;
+    const nodeDef = this.workflowConfig.nodes[node.name] ?? this.workflowConfig.nodes[node.name.split('.')[0]];
+
+    if (decision && typeof decision === 'object' && 'goto' in decision) {
+      // Explicit branch decision with goto
       await this.handleBranchDecision(node);
+    } else if (nodeDef?.branch && nodeDef.branch.length > 0) {
+      // Node has branch rules but signal didn't use structured decision.
+      // Try to resolve by looking for approved files or using the first branch target.
+      const firstBranch = nodeDef.branch[0];
+      if (firstBranch.foreach) {
+        // Fan-out: look for approved items in the signal outputs or filesystem
+        await this.autoFanOut(node, firstBranch.goto, firstBranch.foreach);
+      } else if (firstBranch.goto) {
+        // Simple routing to first branch target
+        const target = this.nodes.get(firstBranch.goto);
+        if (target && target.state === 'pending') {
+          target.dependsOn = target.dependsOn.filter(d => d !== node.name);
+          if (target.dependsOn.length === 0) {
+            // No more deps — mark ready
+          }
+        }
+      }
     }
 
     // Decrement sub-DAG counter when scoped terminal nodes complete
@@ -529,6 +551,57 @@ export class DagExecutor {
       } else if (targetNode) {
         targetNode.state = 'completed';
       }
+    }
+  }
+
+  private async autoFanOut(node: DagNode, targetNode: string, _foreachField: string): Promise<void> {
+    // Try to find approved IDs from signal outputs or filesystem
+    let approvedIds: string[] = [];
+
+    // Check signal outputs for an approved file
+    if (node.signal?.outputs) {
+      for (const output of node.signal.outputs) {
+        const outputPath = output.path.replace(/\\/g, '/');
+        if (outputPath.includes('approved')) {
+          try {
+            let resolvedPath = outputPath;
+            if (resolvedPath.startsWith('.caam/')) resolvedPath = resolvedPath.slice(6);
+            if (resolvedPath.startsWith('shared/')) resolvedPath = resolvedPath;
+            const fullPath = path.join(this.workspacePath, '.caam', resolvedPath);
+            const content = JSON.parse(await fs.readFile(fullPath, 'utf-8'));
+            if (content.approved_ids) approvedIds = content.approved_ids;
+            else if (Array.isArray(content)) approvedIds = content;
+          } catch { /* couldn't read */ }
+        }
+      }
+    }
+
+    // Fallback: scan filesystem for approved-*.json
+    if (approvedIds.length === 0) {
+      try {
+        const sharedDir = path.join(this.workspacePath, '.caam', 'shared');
+        const hypothesesDirs = ['data/hypotheses', 'hypotheses'];
+        for (const dir of hypothesesDirs) {
+          const fullDir = path.join(sharedDir, dir);
+          try {
+            const files = await fs.readdir(fullDir);
+            for (const file of files) {
+              if (file.startsWith('approved') && file.endsWith('.json')) {
+                const content = JSON.parse(await fs.readFile(path.join(fullDir, file), 'utf-8'));
+                if (content.approved_ids) { approvedIds = content.approved_ids; break; }
+              }
+            }
+          } catch { /* dir doesn't exist */ }
+          if (approvedIds.length > 0) break;
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (approvedIds.length === 0) return;
+
+    // Create scoped sub-DAGs for each approved ID
+    for (const id of approvedIds) {
+      await this.spawnScopedSubDag(targetNode, id);
     }
   }
 

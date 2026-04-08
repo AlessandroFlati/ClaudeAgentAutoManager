@@ -13,11 +13,10 @@ export function validateSignalSchema(signal: unknown): signal is SignalFile {
   if (s.scope !== null && typeof s.scope !== 'string') return false;
   if (!['success', 'failure', 'branch', 'budget_exhausted'].includes(s.status as string)) return false;
 
-  if (s.decision !== null) {
-    if (typeof s.decision !== 'object') return false;
-    const d = s.decision as Record<string, unknown>;
-    if (typeof d.goto !== 'string') return false;
-    if (typeof d.reason !== 'string') return false;
+  if (s.decision !== null && s.decision !== undefined) {
+    // Decision can be any structure — goto/reason are optional.
+    // The DAG executor interprets the decision based on node branch rules.
+    if (typeof s.decision !== 'object' && typeof s.decision !== 'string') return false;
   }
 
   if (!Array.isArray(s.outputs)) return false;

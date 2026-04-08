@@ -35,22 +35,63 @@ export class SignalWatcher {
     });
   }
 
+  private pollInterval: ReturnType<typeof setInterval> | null = null;
+  private pollDir: string | null = null;
+  private pollCallback: SignalCallback | null = null;
+
   startRecursive(rootDir: string, onSignal: SignalCallback): void {
     this.stop();
+    this.pollDir = rootDir;
+    this.pollCallback = onSignal;
 
-    this.watcher = chokidar.watch(path.join(rootDir, '**', '*.done.json'), {
-      ignoreInitial: false,
-      awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
-      followSymlinks: true,
-    });
+    // Use polling as primary mechanism (chokidar + recursive globs unreliable on Windows)
+    this.pollInterval = setInterval(() => {
+      this.pollForSignals();
+    }, 2000);
 
-    this.watcher.on('add', async (filepath: string) => {
-      await this.handleSignalFile(filepath, onSignal);
-    });
+    // Also try chokidar as a fast-path
+    try {
+      this.watcher = chokidar.watch(path.join(rootDir, '**', '*.done.json'), {
+        ignoreInitial: false,
+        awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
+        followSymlinks: true,
+        usePolling: true,
+        interval: 1000,
+      });
 
-    this.watcher.on('change', async (filepath: string) => {
-      await this.handleSignalFile(filepath, onSignal);
-    });
+      this.watcher.on('add', async (filepath: string) => {
+        await this.handleSignalFile(filepath, onSignal);
+      });
+
+      this.watcher.on('change', async (filepath: string) => {
+        await this.handleSignalFile(filepath, onSignal);
+      });
+    } catch {
+      // Chokidar may fail; polling will handle it
+    }
+  }
+
+  private async pollForSignals(): Promise<void> {
+    if (!this.pollDir || !this.pollCallback) return;
+    try {
+      await this.scanDirForSignals(this.pollDir, this.pollCallback);
+    } catch { /* directory may not exist yet */ }
+  }
+
+  private async scanDirForSignals(dir: string, onSignal: SignalCallback): Promise<void> {
+    const { readdir, stat } = await import('node:fs/promises');
+    let entries;
+    try { entries = await readdir(dir, { withFileTypes: true }); }
+    catch { return; }
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await this.scanDirForSignals(fullPath, onSignal);
+      } else if (entry.name.endsWith('.done.json')) {
+        await this.handleSignalFile(fullPath, onSignal);
+      }
+    }
   }
 
   stop(): void {
@@ -58,6 +99,12 @@ export class SignalWatcher {
       this.watcher.close();
       this.watcher = null;
     }
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+    this.pollDir = null;
+    this.pollCallback = null;
     this.processedSignals.clear();
   }
 

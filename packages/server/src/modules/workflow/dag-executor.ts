@@ -17,8 +17,8 @@ import { randomHex, writeJsonAtomic, waitForOutput, normalizeAgentPath } from '.
 import { resolvePresetContent, resolvePlaceholders } from './preset-resolver.js';
 import type { WorkflowPlugin } from './sdk.js';
 import { EvolutionaryPool } from './evolutionary-pool.js';
-import type { AgentRegistry } from '../terminal/agent-registry.js';
-import type { AgentBackend, AgentConfig } from '../terminal/agent-backend.js';
+import type { AgentRegistry } from '../agents/agent-registry.js';
+import type { AgentBackend, AgentConfig } from '../agents/agent-backend.js';
 import type { AgentBootstrap } from '../knowledge/agent-bootstrap.js';
 import type { PresetRepository } from '../../db/preset-repository.js';
 
@@ -112,10 +112,13 @@ export class DagExecutor {
           path.dirname(this.workflowConfig._yamlPath ?? ''),
           this.workflowConfig.plugin,
         );
-        const pluginModule = await import(pluginPath);
+        // Convert to file:// URL for Windows compatibility with dynamic import
+        const { pathToFileURL } = await import('node:url');
+        const pluginUrl = pathToFileURL(pluginPath).href;
+        const pluginModule = await import(pluginUrl);
         this.plugin = pluginModule.default as WorkflowPlugin;
       } catch (err) {
-        // Plugin load failure is not fatal — proceed without plugin
+        console.error(`[workflow] Plugin load failed for ${this.workflowConfig.plugin}:`, err);
       }
     }
 
@@ -169,7 +172,9 @@ export class DagExecutor {
           path.dirname(this.workflowConfig._yamlPath ?? ''),
           this.workflowConfig.plugin,
         );
-        const pluginModule = await import(pluginPath);
+        const { pathToFileURL } = await import('node:url');
+        const pluginUrl = pathToFileURL(pluginPath).href;
+        const pluginModule = await import(pluginUrl);
         this.plugin = pluginModule.default as WorkflowPlugin;
       } catch { /* proceed without plugin */ }
     }
@@ -302,7 +307,7 @@ export class DagExecutor {
    * For process/local-llm backends: convert AgentResult to a signal file on disk,
    * then let the signal watcher pick it up naturally.
    */
-  private async generateSignalFromResult(nodeName: string, agentName: string, result: import('../terminal/agent-backend.js').AgentResult): Promise<void> {
+  private async generateSignalFromResult(nodeName: string, agentName: string, result: import('../agents/agent-backend.js').AgentResult): Promise<void> {
     const node = this.nodes.get(nodeName);
     if (!node) return;
 
@@ -823,7 +828,7 @@ export class DagExecutor {
       // 2. No decision.goto — ask plugin for routing
       let resolved = false;
       if (this.plugin?.onResolveRouting && node.signal) {
-        const routing = await this.plugin.onResolveRouting(node.name, node.signal, nodeDef.branch);
+        const routing = await this.plugin.onResolveRouting(node.name, node.signal, nodeDef.branch, this.workspacePath);
         if (routing) {
           if (routing.foreach) {
             const ids = Array.isArray(routing.payload) ? routing.payload as string[] : [];

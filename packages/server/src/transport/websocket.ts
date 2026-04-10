@@ -1,7 +1,7 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 import type http from 'node:http';
 import type { ClientMessage, ServerMessage } from './protocol.js';
-import type { AgentRegistry } from '../modules/terminal/agent-registry.js';
+import type { AgentRegistry } from '../modules/agents/agent-registry.js';
 import type { AgentBootstrap } from '../modules/knowledge/agent-bootstrap.js';
 import type { PresetRepository } from '../db/preset-repository.js';
 import type { WorkflowRepository } from '../db/workflow-repository.js';

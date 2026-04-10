@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
-import { AgentRegistry } from './modules/terminal/agent-registry.js';
+import { AgentRegistry } from './modules/agents/agent-registry.js';
 import { createWebSocketServer } from './transport/websocket.js';
 import { getDb } from './db/database.js';
 import { WorkspaceRepository } from './db/workspace-repository.js';

@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import chokidar, { type FSWatcher } from 'chokidar';
-import type { AgentRegistry } from '../terminal/agent-registry.js';
+import type { AgentRegistry } from '../agents/agent-registry.js';
 
 export class KnowledgeWatcher {
   private watcher: FSWatcher | null = null;

@@ -6,8 +6,6 @@ import type { AgentBackend, AgentConfig, AgentInfo } from './agent-backend.js';
 import { ClaudeCodeSession } from './claude-code-session.js';
 import { ProcessSession } from './process-session.js';
 import { LocalLlmSession } from './local-llm-session.js';
-import type { TerminalConfig } from './types.js';
-import { DEFAULT_COMMAND } from './types.js';
 
 type SpawnCallback = (name: string, purpose: string) => void;
 type ExitCallback = (name: string) => void;
@@ -19,17 +17,13 @@ export class AgentRegistry {
   private readonly exitCallbacks = new Set<ExitCallback>();
   private readonly perAgentExitCallbacks = new Map<string, Array<() => void>>();
 
-  /**
-   * Spawn an agent using the appropriate backend.
-   * For backward compat, also accepts TerminalConfig (treated as claude-code).
-   */
-  async spawn(config: AgentConfig | TerminalConfig): Promise<AgentInfo> {
-    const agentConfig = this.normalizeConfig(config);
-    const backend = await this.createBackend(agentConfig);
+  /** Spawn an agent using the appropriate backend for its type. */
+  async spawn(config: AgentConfig): Promise<AgentInfo> {
+    const backend = await this.createBackend(config);
 
     this.sessions.set(backend.id, backend);
-    if (agentConfig.purpose) {
-      this.purposes.set(backend.name, agentConfig.purpose);
+    if (config.purpose) {
+      this.purposes.set(backend.name, config.purpose);
     }
 
     backend.onExit(() => {
@@ -46,23 +40,8 @@ export class AgentRegistry {
 
     await backend.start();
 
-    for (const cb of this.spawnCallbacks) cb(backend.name, agentConfig.purpose);
+    for (const cb of this.spawnCallbacks) cb(backend.name, config.purpose);
     return backend.info;
-  }
-
-  private normalizeConfig(config: AgentConfig | TerminalConfig): AgentConfig {
-    // If it's already an AgentConfig (has 'backend' field), use directly
-    if ('backend' in config) return config as AgentConfig;
-
-    // Legacy TerminalConfig → AgentConfig
-    const tc = config as TerminalConfig;
-    return {
-      name: tc.name ?? `agent-${Date.now()}`,
-      cwd: tc.cwd ?? process.cwd(),
-      purpose: tc.purpose ?? '',
-      backend: 'claude-code',
-      command: tc.command ?? DEFAULT_COMMAND,
-    };
   }
 
   private async createBackend(config: AgentConfig): Promise<AgentBackend> {

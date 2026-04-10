@@ -1,431 +1,573 @@
-# Claude Agent Auto Manager (CAAM) - Architecture Document
+# Plurics — Architecture Document
 
-Last updated: 2026-04-09 07:47 UTC
+Last updated: 2026-04-10 21:10 UTC
+
+## Why Plurics
+
+The project began as CAAM — "Claude Agent Auto Manager" — a browser-side tool
+for orchestrating multiple Claude Code terminal sessions on a shared workspace.
+That name described an early prototype. Over time the surface area drifted:
+the platform grew a DAG workflow engine, filesystem-based agent communication,
+a normalization layer for LLM output, an evolutionary pool for discovery
+workflows, a Lean 4 integration for formal proofs, and — most importantly — a
+backend abstraction that allows non-Claude agents (deterministic processes,
+local LLMs via Ollama/vLLM) to participate as first-class citizens. It stopped
+being a "manager for Claude Code" and became a general-purpose orchestrator
+for heterogeneous agent networks.
+
+**Plurics** is the rename that catches up with reality. The name is a nod to
+Multics (Multiplexed Information and Computing Service), the 1960s operating
+system that coordinated many users sharing a single mainframe: where Multics
+was about *multi*plexing human users onto one machine, Plurics is about
+*pluri*plexing cognitive work across many agents of different kinds — humans,
+frontier LLMs, local models, and deterministic tools — each contributing to a
+single workflow.
+
+The rename was scoped to user-facing identifiers and concepts whose old name
+had become a lie (e.g. `modules/terminal/` that held three backend types, not
+just terminals). Identifiers that remain accurate and stable (`DagExecutor`,
+`WorkflowPlugin`, `SignalFile`, SQL table names) were left alone.
 
 ## Overview
 
-CAAM is a web-based platform for managing multiple Claude Code terminal sessions as a coordinated agent network. It provides a browser-based IDE-like interface where each pane hosts an autonomous Claude Code agent. Agents communicate through filesystem-based messaging and can be orchestrated by a DAG workflow engine.
+Plurics orchestrates **heterogeneous agent networks** — mixing Claude Code
+terminals, local LLMs, and deterministic processes — via a YAML-defined DAG
+workflow engine. The platform is domain-agnostic: any multi-agent pipeline
+can be defined as a workflow with reusable presets and a plugin that
+implements domain-specific behavior.
 
-The platform is general-purpose: any multi-agent pipeline can be defined as a YAML workflow with reusable agent presets. A research data analysis swarm is included as an example use case.
-
-## Architecture
+**Three layers, clear separation:**
 
 ```
-+--------------------------------------------------+
-|  Browser (localhost:11000)                        |
-|                                                   |
-|  +----------+  +------------------------------+  |
-|  | Sidebar  |  | Terminal Grid (split panes)   |  |
-|  | Workspace|  |  +--------+  +--------+      |  |
-|  | Terminals|  |  | Agent1 |  | Agent2 |      |  |
-|  | Workflow  |  |  +--------+  +--------+      |  |
-|  | Controls |  +------------------------------+  |
-|  +----------+  | Bottom Panel (tabs)            |  |
-|                |  [DAG] [Findings]               |  |
-|                +------------------------------+  |
-+--------------------------------------------------+
-        |  WebSocket + REST API (Vite proxy)
-        v
-+--------------------------------------------------+
-|  Server (localhost:11001)                         |
-|                                                   |
-|  Express HTTP + WebSocket                         |
-|  +-- TerminalRegistry (node-pty sessions)         |
-|  +-- AgentBootstrap (.caam/ dirs, purpose.md)     |
-|  +-- KnowledgeWatcher (chokidar inbox injection)  |
-|  +-- DagExecutor (workflow state machine)          |
-|  +-- SignalWatcher (polling + chokidar)            |
-|  +-- PresetResolver (filesystem + DB)              |
-|  +-- NormalizationLayer (LLM output tolerance)     |
-|  +-- SQLite (workspaces, presets, workflow runs)    |
-+--------------------------------------------------+
+┌───────────────────────────────────────────────────────────────┐
+│ Layer 3 — Workflow Instances (domain-specific)                │
+│                                                               │
+│   workflows/research-swarm/       — Hypothesis discovery      │
+│   workflows/math-discovery/       — Financial + formal proof  │
+│   workflows/theorem-prover-mini/  — Lean 4 theorem proving    │
+│   workflows/smoke-test/           — Backend validation        │
+└───────────────────────────────────────────────────────────────┘
+              ▲
+              │ implements
+┌───────────────────────────────────────────────────────────────┐
+│ Layer 2 — SDK (domain-agnostic primitives)                    │
+│                                                               │
+│   WorkflowPlugin interface (9 hooks)                          │
+│   EvolutionaryPool (tournament / roulette / top-k)            │
+│   AgentBackend interface (claude-code / process / local-llm)  │
+│   SignalFile schema + normalization layer                     │
+└───────────────────────────────────────────────────────────────┘
+              ▲
+              │ uses
+┌───────────────────────────────────────────────────────────────┐
+│ Layer 1 — Platform (no domain knowledge)                      │
+│                                                               │
+│   DagExecutor state machine + run snapshot + resume           │
+│   AgentRegistry (backends factory)                            │
+│   SignalWatcher (chokidar + polling)                          │
+│   YAML parser, preset resolver, purpose generator             │
+│   React frontend (DAG + Findings + optional terminal grid)   │
+│   SQLite (workspaces, presets, workflow runs)                 │
+└───────────────────────────────────────────────────────────────┘
+```
+
+## Deployment Topology
+
+```
+┌──────────────────────────────────────────────────┐
+│  Browser (localhost:11000)                       │
+│                                                  │
+│  React UI — dashboard-first                      │
+│   • DAG visualization (SVG, pan/zoom)            │
+│   • Findings panel (real-time via WebSocket)     │
+│   • Workflow controls (start/pause/resume/stop)  │
+│   • Resumable runs list                          │
+│   • Terminal grid (optional, secondary)          │
+└──────────────────────────────────────────────────┘
+        │  WebSocket + REST API (Vite proxy)
+        ▼
+┌──────────────────────────────────────────────────┐
+│  Server (localhost:11001)                        │
+│                                                  │
+│  Express HTTP + WebSocket server                 │
+│   • AgentRegistry — 3 backend types              │
+│   • DagExecutor + snapshot persistence           │
+│   • SignalWatcher — polling + chokidar           │
+│   • SQLite (workspaces, presets, runs)           │
+│   • Knowledge/inbox watcher                      │
+│                                                  │
+│  Optional local resources:                       │
+│   • Ollama (local LLMs) — http://localhost:11434│
+│   • Lean 4 + Mathlib (lake build)                │
+│   • Python modules (data fetchers, backtesters)  │
+└──────────────────────────────────────────────────┘
 ```
 
 ## Technology Stack
 
 | Layer | Technology |
 |---|---|
-| Runtime | Node.js (ES2022) |
+| Runtime | Node.js 22+ (ES2022) |
 | Language | TypeScript (strict mode) |
-| Backend | Express.js, ws (WebSocket) |
-| Terminal | node-pty (server), xterm.js + WebGL (client) |
-| Database | SQLite via better-sqlite3 (`~/.caam/caam.db`) |
-| File watching | chokidar + manual polling fallback |
+| Backend server | Express.js, ws (WebSocket) |
+| Agent backends | node-pty (claude-code), child_process (process), fetch (local-llm) |
+| Terminal UI (optional) | xterm.js + WebGL |
+| Database | SQLite via better-sqlite3 (`~/.plurics/plurics.db`) |
+| File watching | chokidar v5 + manual polling fallback |
 | Frontend | React 18, Vite |
 | Layout | Allotment (resizable split panes) |
-| Workflow | YAML-defined DAG, filesystem-based signals |
+| Workflow definition | YAML (parsed via `yaml` package) |
+| Formal verification (optional) | Lean 4.29.0 + Mathlib via elan/lake |
+| Local LLM providers | Ollama (native API), vLLM/llama.cpp (OpenAI-compatible) |
 | Testing | Vitest |
 
-## Project Structure
+---
+
+## Layer 1 — Platform
+
+The platform provides general-purpose primitives that know nothing about
+specific domains. It loads workflows, spawns agents, tracks state, persists
+artifacts, and exposes a UI. Everything domain-specific is deferred to the
+SDK (Layer 2) and workflow instances (Layer 3).
+
+### 1.1 Project Structure
 
 ```
 claude-agent-auto-manager/
   package.json                          # Monorepo root (npm workspaces)
-  workflows/
-    research-swarm/
-      workflow.yaml                     # 14-node research analysis pipeline
-      plugin.ts                         # WorkflowPlugin (BH correction, manifest slicing)
-      presets/                          # 14 agent purpose templates
-        ingestor.md ... reporter.md
-      schemas/                          # Domain types (hypothesis DSL, manifest, etc.)
-    presets/
-      research/                         # Preset resolution fallback directory
-  test-data/
-    run-e2e.js                          # WebSocket-based E2E test runner
-    input-manifest.json                 # Test dataset configuration
-    *.parquet                           # Synthetic number theory dataset
+  docs/architecture.md                   # This file
+  workflows/                             # Layer 3 instances
   packages/
     server/src/
-      app.ts                            # Entry point, routes, wiring
+      app.ts                             # Entry point, routes, wiring
       db/
-        database.ts                     # SQLite init + migrations
-        workspace-repository.ts         # Workspace CRUD
-        preset-repository.ts            # Agent preset CRUD
-        workflow-repository.ts          # Run + event persistence + resumable runs
+        database.ts                      # SQLite init + migrations
+        workspace-repository.ts          # Workspace CRUD
+        preset-repository.ts             # Agent preset CRUD
+        workflow-repository.ts           # Run + event persistence
       modules/
-        terminal/
-          types.ts                      # TerminalInfo, TerminalConfig
-          terminal-session.ts           # PTY process wrapper (node-pty)
-          terminal-registry.ts          # Session registry + callbacks
+        agents/                          # Agent backend layer (all three types)
+          agent-backend.ts               # AgentBackend interface + types
+          agent-registry.ts              # Unified multi-backend registry
+          claude-code-session.ts         # node-pty PTY + ClaudeCodeSession
+          process-session.ts             # child_process wrapper
+          local-llm-session.ts           # HTTP client (OpenAI + Ollama native)
         knowledge/
-          agent-bootstrap.ts            # .caam/ directory management
-          knowledge-watcher.ts          # Inbox notification injection
+          agent-bootstrap.ts              # .plurics/ directory management
+          knowledge-watcher.ts            # Inbox notification injection
         workflow/
-          types.ts                      # Signal, DagNode, WorkflowConfig, NodeSnapshot
-          utils.ts                      # Atomic write, SHA-256, sleep, normalization
-          signal-validator.ts           # Signal schema + output integrity
-          signal-watcher.ts             # Polling + chokidar, dedup, pre-populate
-          yaml-parser.ts                # Parse + validate + cycle detection
-          dag-executor.ts               # DAG state machine + resume + snapshot
-          sdk.ts                        # WorkflowPlugin interface (7 hooks)
-          purpose-templates.ts          # Purpose generation + literal JSON template
-          preset-resolver.ts            # Filesystem + DB preset resolution
-          input-types.ts                # 12 DataSource types
-          input-validator.ts            # Input manifest validation
+          types.ts                        # WorkflowConfig, DagNode, NodeSnapshot
+          utils.ts                        # Atomic write, SHA-256, normalization, path helpers
+          signal-validator.ts             # Signal schema + output integrity
+          signal-watcher.ts               # Polling + chokidar, dedup
+          yaml-parser.ts                  # Parse + cycle detection + deprecation warnings
+          dag-executor.ts                 # Core DAG state machine + resume
+          sdk.ts                          # WorkflowPlugin interface (Layer 2)
+          evolutionary-pool.ts            # Pool manager (Layer 2)
+          purpose-templates.ts            # Purpose generation + signal template
+          preset-resolver.ts              # Filesystem + DB preset resolution
+          input-types.ts                  # 12 DataSource types
+          input-validator.ts              # Input manifest validation
       transport/
-        protocol.ts                     # WebSocket message types
-        websocket.ts                    # Message handler + workflow lifecycle
+        protocol.ts                       # WebSocket message types (workflow:* only)
+        websocket.ts                      # Message handler + workflow lifecycle
     web/src/
-      App.tsx                           # Root: layout, state, WebSocket, bottom tabs
-      types.ts                          # Shared protocol types
-      theme.css                         # Design tokens (dark theme)
+      App.tsx                             # Root: Sidebar + bottom DAG/Findings tabs
+      types.ts                            # Shared protocol types
       services/
-        websocket-client.ts             # Auto-reconnect WebSocket
-      stores/
-        terminal-store.ts               # React external store (useSyncExternalStore)
+        websocket-client.ts               # Auto-reconnect WebSocket
       components/
         sidebar/
-          TerminalManager.tsx           # Workspace, spawn, terminal list, workflow
-          WorkspaceSelector.tsx          # Directory autocomplete
-          SpawnModal.tsx                 # Purpose editor + preset quicklist
-        grid/
-          SplitLayout.tsx               # Recursive split-pane renderer
-          PaneToolbar.tsx               # Split/close buttons (SVG icons)
-          EmptySlot.tsx                 # Empty pane placeholder
-          split-tree.ts                # Binary tree layout functions
-        terminal/
-          TerminalPane.tsx              # xterm.js wrapper + resize
+          Sidebar.tsx                     # WorkspaceSelector + WorkflowPanel
+          WorkspaceSelector.tsx           # Directory autocomplete
         workflow/
-          WorkflowPanel.tsx             # Sidebar controls, resumable runs list
-          DagVisualization.tsx           # SVG DAG with pan/zoom
-          FindingsPanel.tsx             # Real-time findings display
-          SourceModal.tsx               # Data source configuration (12 types)
+          WorkflowPanel.tsx                # Controls + resumable runs list
+          DagVisualization.tsx             # SVG DAG with pan/zoom
+          FindingsPanel.tsx                # Real-time findings display
+          SourceModal.tsx                  # Data source configuration
 ```
 
----
+### 1.2 Agent Backend Abstraction
 
-## Terminal Management
+The platform supports three agent backend types, all conforming to a single
+`AgentBackend` interface. The `AgentRegistry` dispatches to the correct
+implementation based on the YAML node's `backend` field.
 
-### PTY Sessions
-
-Each terminal wraps a `node-pty` pseudo-terminal process. On Windows it spawns `powershell.exe`; on Linux/macOS it spawns `bash`. The actual command (e.g., `claude --dangerously-skip-permissions`) is deferred until the client reports terminal dimensions (first `resize` event), preventing TUI apps from rendering at wrong dimensions.
-
-For headless workflow terminals (no browser client), the DAG executor sends `resize(120, 30)` programmatically and uses `waitForOutput` to detect when Claude Code is ready before injecting the purpose prompt.
-
-### waitForOutput
-
-```typescript
-waitForOutput(session, /bypass permissions|>\s*$/i, { timeout: 30000 })
-```
-
-Polls terminal output for a regex match. When Claude Code displays "bypass permissions" (its input readiness indicator), the purpose is injected. Falls back to injection after 30s timeout. Replaces the previous fixed 5-second delay.
-
-### Terminal Registry
-
-In-memory `Map<id, TerminalSession>` with:
-- `getByName(name)` for inbox notification injection
-- `listWithPurpose()` for agents.md regeneration
-- `onSpawn(callback)` / `onTerminalExit(callback)` for workflow hooks
-- `onTerminalExitById(id, callback)` for DAG executor crash detection
-- `onOutput(id, callback)` for log capture
-
-### WebSocket Protocol
-
-Single multiplexed connection per browser client on `/ws`.
-
-| Category | Messages |
-|---|---|
-| Terminal | `spawn`, `input`, `resize`, `kill`, `subscribe`, `list` |
-| Workflow | `start`, `abort`, `pause`, `resume`, `status`, `resume-run` |
-| Server -> Client | `started`, `node-update`, `completed`, `paused`, `resumed`, `finding` |
-
----
-
-## Agent Communication
-
-### Filesystem-Based Messaging
-
-Each workspace has a `.caam/` directory:
-
-```
-<workspace>/.caam/
-  shared/                           # Symlink to current run directory
-    agents.md                       # Auto-generated active agent registry
-    context.md                      # Free-form shared context
-    signals/                        # Workflow completion signals (*.done.json)
-    findings/                       # Human-readable finding reports (*.md)
-    data/                           # Workflow-specific data artifacts
-  agents/
-    <name>/
-      purpose.md                    # Agent instructions + communication protocol
-      inbox.md                      # Messages from other agents (append-only)
-  runs/
-    run-<timestamp>-<hex>/          # Per-run isolated directory
-      purposes/                     # Saved purpose.md per agent
-      logs/                         # Terminal output capture
-      signals/                      # Signal files for this run
-      findings/                     # Finding reports for this run
-      node-states.json              # Snapshot for run resume
-      run-metadata.json             # Timing, config, summary
-      input-manifest.json           # Input data sources
-```
-
-### Agent Bootstrap
-
-When an agent spawns (manually or via workflow):
-1. Creates `.caam/agents/<name>/purpose.md` with user content + communication template
-2. Creates empty `inbox.md`
-3. Regenerates `shared/agents.md` with all active agents
-4. Waits for Claude Code readiness via `waitForOutput`, then injects purpose prompt
-
-### Inbox Notifications
-
-`KnowledgeWatcher` uses chokidar to watch `agents/*/inbox.md`. When a file changes, it debounces (300ms) and injects `[CAAM] New message in your inbox` into the target terminal.
-
-### Agent Presets
-
-Presets are reusable purpose templates stored in SQLite (`agent_presets` table) for cross-project reuse. On startup, the server auto-seeds presets from `workflows/presets/` on the filesystem. The `SpawnModal` UI shows presets sorted by usage frequency.
-
----
-
-## Workflow Orchestration
-
-### Three-Layer Architecture
-
-```
-Layer 3: Workflow Instance    workflows/research-swarm/
-  workflow.yaml, presets/, schemas/, plugin.ts
-
-Layer 2: Workflow SDK         packages/server/src/modules/workflow/sdk.ts
-  WorkflowPlugin interface, 7 hook points, lifecycle contracts
-
-Layer 1: CAAM Platform        packages/server/ + packages/web/
-  Terminals, signals, DAG executor, UI (domain-agnostic)
-```
-
-**Layer 1 (Platform)** owns terminal management, signal protocol, DAG state machine, YAML parsing, normalization layer, and the frontend. It has no knowledge of what agents do inside their terminals.
-
-**Layer 2 (SDK)** defines the `WorkflowPlugin` interface with 7 hook points.
-
-**Layer 3 (Instance)** is a self-contained directory with workflow YAML, agent presets, domain schemas, and a plugin that implements the hooks with domain-specific logic.
-
-### Plugin System
-
-Workflows can specify a `plugin` field in their YAML. The DAG executor dynamically imports the plugin at workflow start and calls its hooks at defined points:
-
-| Hook | When Called | Purpose |
+| Backend | Use case | Transport |
 |---|---|---|
-| `onWorkflowStart` | Once before any agent spawns | Initialize domain registries, counters, directories |
-| `onWorkflowResume` | Once when resuming an interrupted run | Reconstruct plugin internal state from disk artifacts |
-| `onSignalReceived` | After signal validation | Process signals with domain logic (e.g., update test budget) |
-| `onPurposeGenerate` | Per agent spawn | Enrich agent purpose with domain context (e.g., data manifest slices) |
-| `onEvaluateReadiness` | Per pending node per cycle | Custom readiness logic for aggregator nodes |
-| `onResolveRouting` | When `decision.goto` is absent | Resolve domain-specific signal decisions to routing targets |
-| `onWorkflowComplete` | Once at end | Cleanup, notifications |
+| `claude-code` | Creative/analytical agents (Claude Opus/Sonnet/Haiku) | node-pty → `claude --dangerously-skip-permissions` |
+| `process` | Deterministic scripts (Python, `lake build`, data fetchers) | `child_process.spawn` with stdout/stderr capture |
+| `local-llm` | Open-source models (reasoning, specialized) | HTTP to OpenAI-compatible (`/v1/chat/completions`) or Ollama native (`/api/chat`) |
 
-### Signal Protocol
+**Signal generation:**
+- `claude-code` agents write signal files themselves via shell commands (the agent sees the signal protocol in its purpose).
+- `process` and `local-llm` backends don't write signals directly. The platform generates a signal from the `AgentResult` (exit code, stdout, artifacts) and writes it to the run directory, where the `SignalWatcher` picks it up naturally.
 
-Agents report completion by writing JSON signal files to `.caam/shared/signals/`. Signals use atomic write (`.tmp` + rename) and include SHA-256 checksums for output integrity.
+**Local LLM providers:**
 
-The purpose template includes a **literal JSON signal template** that agents can copy and fill, reducing LLM field-naming errors:
+The `LocalLlmSession` supports two API formats:
+- **OpenAI-compatible** (default, `provider: openai`): for vLLM, llama.cpp, LM Studio
+- **Ollama native** (`provider: ollama`): required for Qwen 3.5 / Goedel / DeepSeek-R1 where the `think: false` flag is needed to disable thinking mode (those models otherwise waste all tokens on reasoning prose and produce empty `content`)
 
-```json
-{
-  "schema_version": 1,
-  "signal_id": "sig-YYYYMMDDTHHMMSS-agentName-XXXX",
-  "agent": "agentName",
-  "scope": null,
-  "status": "success",
-  "decision": null,
-  "outputs": [{ "path": "shared/path/to/output.json", "sha256": "...", "size_bytes": 0 }],
-  "metrics": { "duration_seconds": 0, "retries_used": 0 },
-  "error": null
-}
-```
-
-### Normalization Layer
-
-Since agents are LLMs (not deterministic code), their output varies. A centralized normalization layer (`normalizeAgentSignal` in `utils.ts`) runs **before** schema validation:
-
-- **Field aliases**: `size` -> `size_bytes`
-- **Path normalization**: strips `.caam/` prefix, converts `\` to `/` (`normalizeAgentPath`)
-- **Decision flexibility**: any object or string accepted; interpretation delegated to plugin
-
-### Routing Chain
-
-When a node completes with a branch decision, routing follows a three-step chain:
-
-1. **`decision.goto`** — If the agent's signal includes an explicit `goto` field, use it directly
-2. **`plugin.onResolveRouting`** — If no `goto`, ask the plugin to interpret the domain-specific decision
-3. **Branch rules fallback** — Use the first matching branch rule from the YAML definition
-
-### DAG State Machine
+### 1.3 DAG State Machine
 
 ```
-pending -> ready -> spawning -> running -> validating -> completed
-                                  |            |
-                                  v            v
-                               retrying     retrying -> failed
+pending ──► ready ──► spawning ──► running ──► validating ──► completed
+                                        │             │
+                                        ▼             ▼
+                                     retrying ◄── retrying ──► failed
+                                        │
+                                        ▼
+                                      ready   (on retry)
 
-Also: pending -> skipped (upstream_failed or budget_exhausted)
+Also: pending ──► skipped (upstream_failed | budget_exhausted | template skip)
 ```
 
 Features:
-- **Timeout**: configurable per-node, triggers retry
-- **Retry with context**: previous error injected into retry purpose
-- **Branch**: `decision.goto` routing with plugin fallback
-- **Fan-out**: `foreach` field spawns scoped sub-DAGs per item
-- **Scope concurrency**: `max_parallel_hypotheses` limits concurrent scopes (not nodes within scopes)
-- **Agent hard cap**: `max_concurrent_agents` limits total terminals system-wide
-- **Namespace guard**: output path containment per scope
-- **Per-node model**: `model: opus|sonnet|haiku` maps to Claude model IDs
-- **Effort level**: `effort: low` injects `/compact` before purpose for faster execution
+- **Timeout + retry**: per-node timeout with configurable retries. Previous error is injected into the retry purpose for self-correction.
+- **Branch / fan-out**: `decision.goto` with optional `foreach` spawns scoped sub-DAGs. Each sub-DAG is an isolated copy of downstream nodes parameterized by a scope string.
+- **Scope concurrency**: `max_parallel_scopes` limits how many distinct scopes can run in parallel. Nodes within an already-active scope are never blocked. The legacy name `max_parallel_hypotheses` is accepted as an alias for one release and triggers a deprecation warning at parse time.
+- **Global cap**: `max_concurrent_agents` is a hard cap on total terminals/processes in `spawning`/`running`/`validating` state.
+- **Template skip**: base nodes get marked `completed` automatically when scoped versions exist (they have no work to do).
+- **Routing chain**: `decision.goto` → `plugin.onResolveRouting` → YAML branch rules fallback.
+- **`depends_on_all`**: aggregator nodes wait for all scoped instances of named dependencies. The evaluation ignores the base template node when scoped versions exist.
 
-### Concurrency Model
+### 1.4 State Persistence & Run Resume
 
-Two independent limits control parallelism:
-
-1. **Scope concurrency** (`max_parallel_hypotheses`): limits how many distinct scoped sub-DAGs can be active simultaneously. Nodes within an already-active scope are always allowed to proceed.
-2. **Agent hard cap** (`max_concurrent_agents`): global limit on total terminals in `spawning`/`running`/`validating` state. When reached, nodes stay in `ready` until a slot opens.
-
-Worst case without hard cap: with 3 active scopes each running architect+coder+auditor+executor in overlapping phases, up to ~12 agents may be concurrent.
-
-### State Persistence & Run Resume
-
-Every state transition writes a `node-states.json` snapshot to the run directory (debounced via `queueMicrotask`). The snapshot contains the complete node graph including dynamically created scoped nodes.
+Every state transition writes a `node-states.json` snapshot to the run
+directory (debounced via `queueMicrotask`). The snapshot contains the complete
+node graph **including dynamically created scoped nodes**.
 
 **Resume flow** (`DagExecutor.resumeFrom(runId)`):
 
-1. Load `node-states.json` snapshot from disk
-2. Rebuild full node graph (base + scoped nodes) from snapshot
+1. Load `node-states.json`
+2. Rebuild full node graph (base + scoped) from snapshot
 3. Recover signals from `.done.json` files on disk
-4. Demote orphaned nodes (`running`/`spawning` without live terminal) to `ready`
-5. Re-scan for signals written between crash and resume (race condition recovery)
-6. Pre-populate `SignalWatcher.processedSignals` with known signal IDs
+4. Demote orphaned nodes (`running`/`spawning` without live process) to `ready`
+5. Re-scan for signals written between crash and resume
+6. Pre-populate `SignalWatcher.processedSignals` to avoid re-processing
 7. Call `plugin.onWorkflowResume()` for domain state reconstruction
-8. Re-evaluate ready nodes and reschedule
+8. If present, restore `pool-state.json` into the `EvolutionaryPool`
+9. Re-evaluate ready nodes and reschedule
 
-### Workflow YAML
+### 1.5 Signal Protocol & Normalization Layer
 
-```yaml
-name: my-pipeline
-version: 1
-plugin: ./plugin.ts
-config:
-  agent_timeout_seconds: 300
-  max_parallel_hypotheses: 3      # Scope concurrency
-  max_concurrent_agents: 8        # Hard cap on total terminals
-  custom_domain_key: 42           # Passed through to plugin
-shared_context: |
-  Instructions for all agents.
-nodes:
-  step_a:
-    preset: presets/step-a
-    depends_on: []
-    model: sonnet                  # Per-node model selection
-    effort: low                    # Injects /compact before purpose
-    timeout_seconds: 600
-  step_b:
-    preset: presets/step-b
-    depends_on: [step_a]
-    branch:
-      - condition: "ready"
-        goto: step_c
-        foreach: items
-    max_invocations: 3
+Agents report completion by writing JSON signal files to `.plurics/shared/signals/`.
+Signals use atomic write (`.tmp` + rename) and include SHA-256 checksums.
+
+**Normalization layer** (`normalizeAgentSignal` in `utils.ts`) runs before
+schema validation and centralizes all LLM output tolerances:
+- Field aliases: `size` → `size_bytes`
+- Path normalization via `normalizeAgentPath`: strips `.plurics/` prefix, converts `\` to `/`
+- Decision flexibility: any object or string accepted; interpretation delegated to plugin
+
+The purpose template includes a **literal JSON signal template** personalized
+per-agent that reduces LLM field-naming errors. Generic signal protocol
+instructions live in the YAML `shared_context` (read once per session).
+
+### 1.6 Traceability
+
+Each workflow run creates an isolated directory under `.plurics/runs/{runId}/`:
+
+```
+.plurics/runs/{runId}/
+  purposes/          # Every agent's generated purpose.md (including retries)
+  logs/              # Captured stdout/stderr per agent
+  signals/           # Completion signal files
+  findings/          # Human-readable finding reports (domain-specific)
+  node-states.json   # Snapshot for run resume
+  pool-state.json    # Evolutionary pool snapshot (if used)
+  run-metadata.json  # Timing, config, summary
+  input-manifest.json
 ```
 
-### Preset Resolution
+`.plurics/shared` is a junction (Windows) or symlink (Linux) to the current run
+directory — agents write to `shared/` as usual, traceability is automatic.
 
-1. Filesystem: `workflows/presets/{name}.md` (relative to workflow YAML)
-2. Database: `agent_presets` table
-3. Fallback: generic description
+### 1.7 Frontend Philosophy
 
-Templates use `{{PLACEHOLDER}}` syntax resolved at spawn time. All config values are available as uppercase placeholders (e.g., `{{ROUND}}`, `{{SCOPE}}`).
+**The UI is an observability dashboard**, period. There is no terminal
+multiplexer and no manual spawn affordance — humans cannot realistically
+follow multiple Claude Code sessions in parallel, and any attempt to do so
+was dead weight that we removed in the rebrand (−1524 LOC, bundle from
+670 kB to 180 kB, 3.7x smaller).
+
+The interface has exactly three concerns:
+
+1. **Workflow controls** — workspace selector, YAML file picker, data source
+   modal, start/pause/resume/stop buttons, resumable runs list
+2. **DAG visualization** — horizontal left-to-right flow, state-colored nodes,
+   pan/zoom, updates live via WebSocket `workflow:node-update` events
+3. **Findings panel** — real-time collapsible list of finding reports with
+   verdict badges, populated via `workflow:finding` events
+
+All agent I/O is captured server-side in `.plurics/runs/{runId}/logs/` and
+accessible via REST (`GET /api/workflows/runs/:runId/log/:agent`). Process
+and local-llm backends run headless; claude-code backends use a PTY
+internally but the PTY stream stays on the server — the browser never sees
+it live. If you need to watch a single agent step-by-step for debugging,
+read the log file directly.
 
 ---
 
-## Frontend
+## Layer 2 — SDK
 
-### Layout
+The SDK is the contract between the platform and workflow instances. Plugins
+implement hooks to inject domain-specific behavior at well-defined points,
+and use helper modules (EvolutionaryPool) that the platform persists and
+manages for them.
+
+### 2.1 WorkflowPlugin Interface
+
+Nine optional hooks:
+
+| Hook | When called | Purpose |
+|---|---|---|
+| `onWorkflowStart` | Once before any agent spawns | Initialize registries, counters, directories, Lean project setup |
+| `onWorkflowResume` | Once when resuming an interrupted run | Reconstruct plugin internal state from disk artifacts |
+| `onSignalReceived` | After signal validation, before routing | Process signals with domain logic (e.g. copy files, update test budget, compact handoffs) |
+| `onEvaluationResult` | After a signal from an evaluator node | Update the `EvolutionaryPool` based on the evaluation |
+| `onEvolutionaryContext` | Before generator node purpose (rounds 2+) | Return pool context (positive/negative examples, confirmed findings) |
+| `onPurposeGenerate` | Per agent spawn | Enrich agent purpose with domain context (data profile, handoffs, relevant columns) |
+| `onEvaluateReadiness` | Per pending node per cycle | Custom readiness logic (aggregator nodes) |
+| `onResolveRouting` | When `decision.goto` is absent and branch rules exist | Resolve domain-specific decisions to routing targets (including foreach fan-out) |
+| `onWorkflowComplete` | Once at end | Cleanup, notifications |
+
+`PurposeContext` passed to `onPurposeGenerate` includes: `scope`, `retryCount`,
+`previousError`, `workspacePath`, `config`, `pool` (EvolutionaryPool instance),
+and `round` (invocation count of the calling node).
+
+### 2.2 AgentBackend Interface
+
+```typescript
+interface AgentBackend {
+  readonly id: string;
+  readonly name: string;
+  readonly backendType: 'claude-code' | 'process' | 'local-llm';
+  readonly info: AgentInfo;
+
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  isAlive(): boolean;
+
+  inject(content: string): Promise<void>;
+  onOutput(callback: (data: string) => void): () => void;
+  onExit(callback: () => void): () => void;
+
+  resize(cols: number, rows: number): Promise<void>;  // claude-code only
+  write(data: string): void;                           // claude-code only
+
+  getResult(): AgentResult | null;  // process/local-llm only
+}
+```
+
+**`AgentConfig`** fields (YAML → backend selection):
+- Common: `name`, `cwd`, `purpose`, `backend`
+- `claude-code`: `command`, `effort`
+- `process`: `processCommand` (array), `workingDir`, `env`
+- `local-llm`: `endpoint`, `model`, `maxTokens`, `temperature`, `systemPrompt`, `provider` (`openai`|`ollama`), `disableThinking`
+
+### 2.3 EvolutionaryPool
+
+Population manager for discovery workflows. Maintains a pool of candidates
+with fitness scores and lineage tracking.
+
+```typescript
+interface PoolCandidate {
+  id: string;
+  content: string;              // Natural language + formal representation
+  fitness: { composite: number; dimensions: Record<string, number> };
+  generation: number;           // Round when added
+  parentIds: string[];          // Lineage
+  status: 'pending' | 'testing' | 'confirmed' | 'falsified' | 'inconclusive' | 'superseded';
+  metadata: Record<string, unknown>;  // Plugin-specific
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+**Selection strategies**: `tournament`, `roulette`, `top-k`, `random`.
+
+**Helpers**: `getConfirmed()`, `getFalsified()`, `getLineage(id)`,
+`selectForContext(k)` (positive), `selectAsNegativeExamples(k)` (negative),
+`computeCompositeFitness(dimensions, weights)`.
+
+**Persistence**: `snapshot()` / `restore(snapshot)`. The platform writes
+`pool-state.json` alongside `node-states.json` and restores it in `resumeFrom`.
+
+### 2.4 SignalFile Schema
+
+```typescript
+interface SignalFile {
+  schema_version: 1;
+  signal_id: string;           // Unique per signal (dedup key)
+  agent: string;               // Base agent name
+  scope: string | null;        // Sub-DAG scope if applicable
+  status: 'success' | 'failure' | 'branch' | 'budget_exhausted';
+  decision: unknown;           // Domain-specific, interpreted by plugin
+  outputs: Array<{ path: string; sha256: string; size_bytes: number }>;
+  metrics: { duration_seconds: number; retries_used: number };
+  error: { category: string; message: string; recoverable: boolean } | null;
+}
+```
+
+The `decision` field is intentionally opaque to the platform. The routing
+chain interprets it: first trying `decision.goto`, then delegating to
+`plugin.onResolveRouting`, then falling back to YAML branch rules.
+
+---
+
+## Layer 3 — Workflow Instances
+
+Each workflow instance lives in `workflows/{name}/` and is self-contained:
 
 ```
-+--sidebar--+---main area----------------------------+
-| Workspace  | Terminal Grid (Allotment split panes)   |
-| Terminals  |   +----------+  +----------+           |
-| Spawn Btn  |   | Agent 1  |  | Agent 2  |           |
-| Term List  |   +----------+  +----------+           |
-|            +----------------------------------------+
-| Workflow   | Bottom Panel (tabbed)                   |
-| File Pick  |  [DAG] [Findings (N)]                   |
-| Sources    |  DAG: SVG nodes with state colors       |
-| Start/Stop |  Findings: collapsible list per hyp.    |
-| Resume     |                                         |
-+------------+----------------------------------------+
+workflows/{instance-name}/
+  workflow.yaml     # DAG definition, config, node backends
+  plugin.ts         # WorkflowPlugin implementation
+  presets/          # Agent preset markdown files (copied to workflows/presets/research/{name}/ for resolution)
+  schemas/          # Domain TypeScript types (optional)
+  lean-template/    # Lean 4 project template (if applicable)
 ```
 
-- **Sidebar**: workspace selector, spawn agent button, terminal list, workflow controls (file picker, data sources, start/pause/resume/stop), resumable runs list
-- **Terminal grid**: resizable split panes (Allotment), binary tree layout
-- **Bottom panel**: tabbed view with DAG visualization and Findings panel
+Four reference workflows ship with Plurics:
 
-### DAG Visualization
+### 3.1 Research Swarm — `workflows/research-swarm/`
 
-SVG-based horizontal left-to-right layout via Kahn's topological sort. State-colored nodes (gray=pending, yellow=running, green=completed, red=failed, dimmed=skipped). Pan with mouse drag, zoom with wheel towards cursor, auto-fit centered on mount.
+**Purpose**: autonomous statistical research on tabular datasets.
 
-### Findings Panel
+**Pipeline**: 14-agent DAG across 4 phases:
+- **Phase 0 (Ingestion)**: Ingestor → Profiler
+- **Phase 1 (Hypothesis screening)**: Hypothesist → Adversary → Judge (loop for more rounds)
+- **Phase 2 (Validation)**: per-hypothesis fan-out: Architect → Coder → Auditor ⟷ Fixer → Executor → Falsifier
+- **Phase 3 (Reporting)**: Generalizer → Reporter (writes finding.md)
+- **Phase 4 (Synthesis)**: Meta-Analyst aggregates all findings
 
-Real-time display of hypothesis findings as they complete the pipeline. Each finding shows:
-- Hypothesis ID and title (extracted from markdown heading)
-- Verdict badge (CONFIRMED=green, CONFIRMED WITH RESERVATIONS=orange, NOT CONFIRMED=gray, FALSIFIED=red)
-- Collapsible full content (markdown)
+**Feedback loops**:
+- Falsified hypotheses: Falsifier writes `rejection-reason.md` with reformulation suggestions. Branch routes back to Hypothesist round 2+.
+- Hypothesist round 2+ reads both findings (positive context) and rejection-reasons (negative context).
+- Code review loop: Auditor ⟷ Fixer iterates up to `max_audit_rounds`.
 
-Findings arrive via `workflow:finding` WebSocket events and are also loadable via REST endpoint for reconnection.
+**Model selection**: Opus for reasoning (Hypothesist, Adversary, Judge, Architect, Auditor, Falsifier, Generalizer, Meta-Analyst); Sonnet for mechanical tasks (Ingestor, Profiler, Coder, Fixer, Executor, Reporter).
 
-### State Management
+**E2E validated** (2026-04-09): 54/54 nodes completed in ~59 minutes on a synthetic number theory dataset (10K integers, 1.2K prime gaps, 39K digit distributions). 5 findings produced, final report generated by Meta-Analyst.
 
-- Terminal state: React external store (`useSyncExternalStore`)
-- Layout state: binary tree in `useState`, synced with terminal state via `useEffect`
-- Workflow state: custom `useWorkflowState` hook, shared between sidebar, DAG panel, and findings panel. Tracks: yaml, runId, nodes, summary, error, paused, findings.
+### 3.2 Math Discovery — `workflows/math-discovery/`
 
-### Design System
+**Purpose**: formal mathematical discovery on financial time series. Combines empirical pattern mining with formal proof verification in Lean 4, gated by an operational backtest only after enough formally verified findings exist.
 
-Dark theme with CSS custom properties: 4-layer surface hierarchy, 3-tier text, semantic colors (success/warning/error), Inter font for UI, monospace for terminals.
+**Pipeline**: 14-node DAG across 3 phases:
+- **Phase A (Empirical)**: OHLC Fetcher [process] → Profiler → Conjecturer → Critic → Selector
+- **Phase B (Formal Verification, per-conjecture fan-out)**: Formalizer → Strategist → Prover [local-llm] → Lean check [process] → Counterexample search → Abstractor → Synthesizer
+- **Phase C (Operational, gated)**: Backtest Designer → Backtester [process]
+
+**Phase C gate**: the Synthesizer only routes to `backtest_designer` when
+`min_confirmed_findings_for_backtest` findings exist in the pool. Otherwise
+it loops back to the Conjecturer for another round.
+
+**Mixed backends**: uses all three backend types:
+- `claude-code`: Conjecturer, Critic, Selector, Formalizer, Strategist, Counterexample, Abstractor, Synthesizer, Backtest Designer
+- `local-llm`: Prover (Goedel-Prover-V2 or similar, via vLLM or Ollama)
+- `process`: OHLC Fetcher, Lean check (`lake build`), Backtester
+
+**Evolutionary pool**: integrates `EvolutionaryPool` via the plugin's
+`onEvaluationResult` and `onEvolutionaryContext` hooks. Fitness dimensions:
+novelty, plausibility, formalizability, relevance.
+
+**Prover self-correction loop**: the plugin manages the prover ⟷ lean_check
+retry loop internally (avoiding explicit DAG back-edges). Up to
+`prover_max_self_corrections` attempts, with compiler error feedback injected
+on each retry.
+
+**Incremental Lean project**: proved theorems are copied from
+`Conjectures/` to `Theorems/` for reuse in subsequent proofs. Mathlib cache
+(via Azure CDN) avoids rebuilding the library from scratch.
+
+**Status**: implementation complete, requires local vLLM + OHLC fetcher Python module for E2E.
+
+### 3.3 Theorem Prover Mini — `workflows/theorem-prover-mini/`
+
+**Purpose**: minimal reference implementation of the formal verification
+pattern (generator → formalizer → prover → compiler → reporter) with no
+external data dependencies.
+
+**Pipeline**: 5-node DAG:
+```
+conjecturer (claude-code/opus)
+  ↓ generates 3 elementary theorems with fan-out
+formalizer (claude-code/opus)
+  ↓ writes Lean 4 statement with `sorry`
+prover (claude-code/opus)                ← the variable backend node
+  ↓ fills in the proof
+lean_check (process/lake build)
+  ↓ verifies
+    ├─ proof_valid ──► reporter (claude-code/sonnet) ──► finding.md
+    └─ proof_invalid ──► prover (retry with error context)
+```
+
+**Incremental Lean project lifecycle**: the plugin manages a standalone Lean
+project at `{workspace}/lean-project/` (outside `.plurics/`) so that the Mathlib
+build cache persists across runs. A `rebuildTheoremsIndex` helper keeps the
+`Theorems.lean` aggregator in sync with the files present in `Theorems/`.
+
+**File flow**: formalizer writes to `.plurics/shared/formalized/{SCOPE}.lean`;
+the plugin's `onSignalReceived` copies to `lean-project/TheoremProverMini/Theorems/{snake_scope}.lean`
+and rebuilds the aggregator index. The prover overwrites the same
+`formalized/` file; the plugin applies the same copy.
+
+**E2E validated** (2026-04-10, Claude Opus as prover):
+
+| Stage | Duration (T-001) |
+|---|---|
+| Conjecturer (generates 3 theorems) | 90s |
+| Formalizer.T-001 | 30s |
+| Prover.T-001 (Claude Opus) | 50s |
+| lean_check.T-001 (`lake build`) | 102s |
+| Reporter.T-001 | 64s |
+| **Total T-001 end-to-end** | **~337s** |
+
+T-001 was the binomial identity `(n+m)² = n² + 2nm + m²`, proved with
+`intro n m; ring` on the first attempt (no retries). The `workflow:finding`
+event delivered the finding to the UI in real time.
+
+**Known issues documented during the run**:
+
+- **Goedel-Prover-V2-32B Q4_K_M GGUF (mradermacher)** is unusable as the
+  `local-llm` prover backend. The quantized GGUF loses the original model's
+  chat template, causing the model to loop on prosaic reasoning ("perhaps
+  `ring_nf` is better for ℕ. Alternatively, perhaps...") and exhaust its
+  token budget without producing a clean code block. This is a model-quality
+  issue, not a workflow bug — validated by switching to Claude Opus, after
+  which the same pipeline produced a verified proof on the first try.
+- **`lean_check` timeout scaling**: 300s is sufficient for simple imports
+  (`Mathlib.Tactic`) but insufficient when a theorem requires additional
+  modules (e.g. `Mathlib.Algebra.BigOperators.Basic`) whose transitive
+  dependencies have not yet been linked. Fix for future runs: raise
+  `lean_check.timeout_seconds` to 900s or pre-import heavy modules in the
+  `Theorems.lean` placeholder to amortize the cost.
+- **Fan-out serialization**: `max_parallel_scopes: 1` correctly serializes
+  scoped sub-DAGs when the local-llm backend is shared (Ollama processes one
+  request per model at a time).
+
+### 3.4 Smoke Test — `workflows/smoke-test/`
+
+**Purpose**: minimal validation of the three backend types end-to-end.
+
+**Pipeline**: 3-node linear DAG:
+1. `echo_node` [process] — `powershell Write-Output 'hello'` (~2s)
+2. `writer` [claude-code/sonnet] — writes a sentence about primes (~30s)
+3. `reviewer` [local-llm/ollama] — Qwen 3.5:35b reviews with `think: false` (~0.6s)
+
+**E2E validated** (2026-04-10): 3/3 nodes completed in 34s. Reviewer responded
+"APPROVED" with 4 tokens. This was the run that surfaced two bugs later fixed:
+- `LocalLlmSession.inject()` needed `onExit` registered before the fetch call (race for fast completions)
+- Qwen 3.5 reasoning mode exhausts `max_tokens` in thinking before producing `content`, requiring Ollama native API with `think: false` (OpenAI-compat endpoint cannot disable thinking)
 
 ---
 
 ## Database
 
-SQLite at `~/.caam/caam.db` with WAL journal mode.
+SQLite at `~/.plurics/plurics.db` with WAL journal mode.
 
 | Table | Purpose |
 |---|---|
@@ -442,7 +584,7 @@ SQLite at `~/.caam/caam.db` with WAL journal mode.
 | Endpoint | Method | Description |
 |---|---|---|
 | `/api/health` | GET | Health check |
-| `/api/terminals` | GET | List active terminals |
+| `/api/terminals` | GET | List active terminals (claude-code backends only) |
 | `/api/validate-path` | POST | Check directory exists |
 | `/api/list-dirs` | GET | Directory autocomplete |
 | `/api/list-files` | GET | List files by extension in directory |
@@ -464,81 +606,60 @@ SQLite at `~/.caam/caam.db` with WAL journal mode.
 
 ---
 
+## WebSocket Protocol
+
+Single multiplexed connection per browser client on `/ws`.
+
+| Client → Server | Description |
+|---|---|
+| `terminal:spawn` | Manual spawn (always creates a claude-code backend) |
+| `terminal:input` / `terminal:resize` / `terminal:kill` / `terminal:subscribe` / `terminal:list` | Terminal ops for claude-code backends |
+| `workflow:start` | Begin a new workflow run (with optional `inputManifest`) |
+| `workflow:abort` | Abort a running workflow |
+| `workflow:pause` / `workflow:resume` | Suspend/continue scheduling |
+| `workflow:status` | Query current state |
+| `workflow:resume-run` | Resume an interrupted run from snapshot |
+
+| Server → Client | Description |
+|---|---|
+| `terminal:output` / `terminal:created` / `terminal:exited` / `terminal:list` | Terminal events |
+| `workflow:started` | Initial snapshot sent to client |
+| `workflow:node-update` | State transition event |
+| `workflow:completed` | Run finished (or aborted) with summary |
+| `workflow:paused` / `workflow:resumed` | Pause/resume acknowledgments |
+| `workflow:finding` | Real-time finding emission (content + hypothesis/theorem ID) |
+| `error` | Protocol or validation error |
+
+---
+
+## Windows-Specific Considerations
+
+- **chokidar + NTFS junctions**: chokidar with recursive globs does not reliably follow NTFS junctions. Signal detection uses dual mechanism: chokidar (fast-path) + 2-second polling fallback (reliable). Both deduplicate via `processedSignals` Set.
+- **Symlinks**: `.plurics/shared` uses `junction` type (no admin required). Falls back to a real directory if junction creation fails.
+- **Shell**: node-pty spawns `powershell.exe` on Windows, `bash` elsewhere.
+- **Path normalization**: `normalizeAgentPath` converts backslashes to forward slashes and strips duplicate `.plurics/` prefixes — applied everywhere agent-written paths are consumed.
+- **Claude Code v2.1.100+**: slash command autocomplete intercepts programmatic `/compact` injection. The DAG executor no longer uses `/compact`; the `effort` config field is a no-op for `claude-code` backends.
+- **Ollama on Windows**: installed at `%LOCALAPPDATA%\Programs\Ollama\ollama.exe`. Must be started with `ollama serve` (no `ollama app.exe` wrapper when running in background).
+- **Lean 4 on Windows**: install via elan (`iwr -useb https://raw.githubusercontent.com/leanprover/elan/master/elan-init.ps1 | iex`). Toolchain pins to `leanprover/lean4:v4.29.0`; Mathlib cache via `lake exe cache get` downloads precompiled oleans from Azure CDN.
+
+---
+
 ## Ports
 
 | Port | Service |
 |---|---|
 | 11000 | Vite dev server (frontend + proxy) |
 | 11001 | Express + WebSocket server (backend) |
+| 11434 | Ollama (if using `local-llm` backend with Ollama) |
+| 8000 | vLLM (if using `local-llm` backend with vLLM, default) |
 
 ---
 
-## Example Use Case: Research Data Analysis Swarm
+## Design Invariants
 
-CAAM includes a complete 14-agent research pipeline (`workflows/research-swarm/workflow.yaml`) as a reference implementation:
-
-**Phase 0 -- Ingestion**: Ingestor (format detection, normalization) -> Profiler (EDA, data manifest)
-
-**Phase 1 -- Hypothesis Screening**: Hypothesist (structured hypothesis generation, reads findings + rejection-reasons in rounds 2+) -> Adversary (adversarial review) -> Judge (filter + routing, loops back for more if needed)
-
-**Phase 2 -- Validation**: Per-hypothesis fan-out: Architect (test design) -> Coder (script implementation) -> Auditor <-> Fixer (code review loop) -> Executor (script execution) -> Falsifier (robustness testing, writes rejection-reason.md if falsified)
-
-**Phase 3 -- Reporting**: Generalizer (condition relaxation) -> Reporter (self-contained finding document per hypothesis)
-
-**Phase 4 -- Synthesis**: Meta-Analyst (reads all findings, clustering, causal graph, importance ranking, final report)
-
-### Feedback Loops
-
-- **Falsified hypotheses**: Falsifier writes `rejection-reason.md` with root-cause analysis and reformulation suggestions. Branch routes back to Hypothesist round 2+, which reads rejection-reasons to generate improved replacements.
-- **Confirmed findings**: Reporter writes `H-NNN-finding.md` to `findings/`. Hypothesist round 2+ reads these to build on discoveries and avoid redundancy.
-- **Code review loop**: Auditor <-> Fixer can iterate up to `max_audit_rounds` times until code passes review.
-
-### Model Selection
-
-Agents are assigned models based on task complexity:
-
-| Agent | Model | Rationale |
-|---|---|---|
-| Ingestor, Profiler, Coder, Fixer, Executor, Reporter | Sonnet | Mechanical tasks with clear instructions |
-| Hypothesist, Adversary, Judge, Architect, Auditor, Falsifier, Generalizer | Opus | Reasoning, judgment, creativity required |
-| Meta-Analyst | Default (Opus) | Complex synthesis across all findings |
-
-### Research-Specific Features
-
-- Structured Hypothesis DSL (6 types: association, difference, causal, structural, temporal, descriptive)
-- Benjamini-Hochberg FDR correction for multiple testing
-- Effect size joint acceptance gates (statistical significance + practical significance)
-- 6 falsification strategies (permutation, bootstrap, subgroup reversal, leave-one-out, temporal split, random confounder)
-- 4 generalization strategies (remove subgroup filter, remove covariates, weaken thresholds, correlated variable substitution)
-
-### E2E Validation
-
-Validated with synthetic number theory dataset: 10K integers (21 columns), 1.2K prime gaps, 39K digit distributions. Pipeline successfully executed 80+ nodes across all 14 agent types, with fan-out parallelism, auditor/fixer loops, falsification, and generalization. Findings panel populated in real-time via WebSocket.
-
----
-
-## Traceability
-
-Each workflow run creates an isolated directory under `.caam/runs/{runId}/`:
-
-```
-.caam/runs/{runId}/
-  purposes/          # Every agent's generated purpose.md (including retries)
-  logs/              # Terminal output captured per agent
-  signals/           # Completion signal files
-  findings/          # Human-readable finding reports
-  node-states.json   # Snapshot for run resume
-  run-metadata.json  # Timing, config, summary
-  input-manifest.json
-```
-
-`.caam/shared` is a junction (Windows) or symlink (Linux) to the current run directory -- agents write to `shared/` as usual, traceability is automatic.
-
----
-
-## Windows-Specific Considerations
-
-- **chokidar + NTFS junctions**: chokidar with recursive globs does not reliably follow Windows NTFS junctions. Signal detection uses dual mechanism: chokidar (fast-path) + 2-second polling fallback (reliable). Both deduplicate via `processedSignals` Set.
-- **Symlinks**: `.caam/shared` uses `junction` type on Windows (no admin required). Falls back to real directory if junction fails.
-- **Shell**: node-pty spawns `powershell.exe` on Windows, `bash` on Linux/macOS.
-- **Path normalization**: `normalizeAgentPath` converts backslashes to forward slashes and strips duplicate `.caam/` prefixes -- applied everywhere agent-written paths are consumed.
+1. **Layer 1 never knows the domain**: the DagExecutor, SignalWatcher, YAML parser, and frontend must work identically for research hypotheses, mathematical theorems, or any other domain. Domain logic lives in plugins.
+2. **Signals are append-only and self-contained**: once written, a signal file is never modified. The `signal_id` is a unique dedup key. Plugins interpret `decision` but never mutate signals.
+3. **The platform serializes what the plugin allows**: `max_parallel_scopes` and `max_concurrent_agents` are enforced by the scheduler. Plugins can further constrain via `onEvaluateReadiness`.
+4. **Snapshots are the source of truth for resume**: the only thing that must survive a crash is `node-states.json` and `pool-state.json`. Everything else (terminal state, timers, plugin internal state) is recomputable.
+5. **Agents are stateless between invocations**: each retry spawns a fresh agent with a fresh purpose. State is transmitted via filesystem (shared workspace, signal files, handoff files).
+6. **One signal per completion**: the platform expects exactly one signal per scheduled invocation. Multiple signals from the same agent invocation cause undefined behavior.

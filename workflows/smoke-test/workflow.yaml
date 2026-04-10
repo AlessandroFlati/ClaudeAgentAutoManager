@@ -1,0 +1,44 @@
+name: smoke-test
+version: 1
+plugin: ./plugin.ts
+
+config:
+  agent_timeout_seconds: 300
+
+shared_context: |
+  You are part of a smoke test for the CAAM agent backend abstraction.
+  Your task is to produce a valid signal.
+
+  SIGNAL PROTOCOL:
+  1. Write outputs to .caam/shared/ via .tmp + mv
+  2. Verify JSON before writing
+  3. Signal file LAST, via .tmp + mv
+  4. Use size_bytes (not size), paths relative to .caam/
+
+nodes:
+
+  # Process backend — deterministic echo script
+  echo_node:
+    preset: smoke/echo
+    backend: process
+    command: ["powershell", "-NoProfile", "-Command", "Write-Output 'hello from process backend'; exit 0"]
+    depends_on: []
+    timeout_seconds: 60
+
+  # Claude-code backend — normal agent (sonnet for speed)
+  writer:
+    preset: smoke/writer
+    backend: claude-code
+    model: sonnet
+    depends_on: [echo_node]
+
+  # Local-llm backend — Qwen3.5 via Ollama (native API with thinking disabled)
+  reviewer:
+    preset: smoke/reviewer
+    backend: local-llm
+    endpoint: http://localhost:11434
+    provider: ollama
+    disable_thinking: true
+    model: qwen3.5:35b
+    max_tokens: 512
+    depends_on: [writer]

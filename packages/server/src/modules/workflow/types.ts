@@ -102,6 +102,10 @@ export interface WorkflowNodeDef {
   endpoint?: string;
   // local-llm backend: max tokens for completion
   max_tokens?: number;
+  // local-llm backend: provider API format ('openai' or 'ollama')
+  provider?: 'openai' | 'ollama';
+  // local-llm backend: disable thinking mode (Ollama only, for Qwen/DeepSeek-R1)
+  disable_thinking?: boolean;
 }
 
 // --- State Transitions ---

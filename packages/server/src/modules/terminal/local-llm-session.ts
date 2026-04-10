@@ -62,43 +62,102 @@ export class LocalLlmSession implements AgentBackend {
 
     const startTime = Date.now();
     this.abortController = new AbortController();
+    const provider = this.config.provider ?? 'openai';
 
     try {
-      const messages: Array<{ role: string; content: string }> = [];
+      let completion: string;
+      let usage: { prompt: number; completion: number } | null = null;
+      let finishReason = 'unknown';
 
-      if (this.config.systemPrompt) {
-        messages.push({ role: 'system', content: this.config.systemPrompt });
-      }
-      messages.push({ role: 'user', content });
+      if (provider === 'ollama') {
+        // Ollama native API — supports `think: false` for reasoning models
+        const ollamaEndpoint = endpoint.replace(/\/v1\/?$/, '').replace(/\/$/, '');
+        const messages: Array<{ role: string; content: string }> = [];
+        if (this.config.systemPrompt) {
+          messages.push({ role: 'system', content: this.config.systemPrompt });
+        }
+        messages.push({ role: 'user', content });
 
-      const response = await fetch(`${endpoint}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        const body: Record<string, unknown> = {
           model: this.config.model ?? 'default',
           messages,
-          max_tokens: this.config.maxTokens ?? 16384,
-          temperature: this.config.temperature ?? 0.0,
           stream: false,
-        }),
-        signal: this.abortController.signal,
-      });
+          options: {
+            num_predict: this.config.maxTokens ?? 8192,
+            temperature: this.config.temperature ?? 0.0,
+          },
+        };
+        if (this.config.disableThinking) body.think = false;
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`LLM API error ${response.status}: ${errorText}`);
+        const response = await fetch(`${ollamaEndpoint}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: this.abortController.signal,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Ollama API error ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json() as {
+          message?: { content: string; thinking?: string };
+          done_reason?: string;
+          prompt_eval_count?: number;
+          eval_count?: number;
+        };
+
+        completion = data.message?.content ?? data.message?.thinking ?? '';
+        finishReason = data.done_reason ?? 'unknown';
+        if (data.prompt_eval_count != null && data.eval_count != null) {
+          usage = { prompt: data.prompt_eval_count, completion: data.eval_count };
+        }
+      } else {
+        // OpenAI-compatible API
+        const messages: Array<{ role: string; content: string }> = [];
+        if (this.config.systemPrompt) {
+          messages.push({ role: 'system', content: this.config.systemPrompt });
+        }
+        messages.push({ role: 'user', content });
+
+        const response = await fetch(`${endpoint}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: this.config.model ?? 'default',
+            messages,
+            max_tokens: this.config.maxTokens ?? 8192,
+            temperature: this.config.temperature ?? 0.0,
+            stream: false,
+          }),
+          signal: this.abortController.signal,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`LLM API error ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json() as {
+          choices: Array<{ message: { content: string; reasoning?: string }; finish_reason: string }>;
+          usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+        };
+
+        const msg = data.choices?.[0]?.message;
+        completion = (msg?.content || msg?.reasoning) ?? '';
+        finishReason = data.choices?.[0]?.finish_reason ?? 'unknown';
+        if (data.usage) {
+          usage = { prompt: data.usage.prompt_tokens, completion: data.usage.completion_tokens };
+        }
       }
-
-      const data = await response.json() as {
-        choices: Array<{ message: { content: string }; finish_reason: string }>;
-        usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-      };
-
-      const completion = data.choices?.[0]?.message?.content ?? '';
-      const finishReason = data.choices?.[0]?.finish_reason ?? 'unknown';
 
       // Stream the completion to output listeners
       for (const cb of this.outputListeners) cb(completion);
+      if (usage) {
+        const usageStr = `\n[tokens] prompt: ${usage.prompt}, completion: ${usage.completion}, finish: ${finishReason}\n`;
+        for (const cb of this.outputListeners) cb(usageStr);
+      }
 
       this.result = {
         success: true,
@@ -108,12 +167,6 @@ export class LocalLlmSession implements AgentBackend {
         durationMs: Date.now() - startTime,
         artifacts: [],
       };
-
-      // Log usage if available
-      if (data.usage) {
-        const usage = `[tokens] prompt: ${data.usage.prompt_tokens}, completion: ${data.usage.completion_tokens}, finish: ${finishReason}`;
-        for (const cb of this.outputListeners) cb(`\n${usage}\n`);
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.result = {

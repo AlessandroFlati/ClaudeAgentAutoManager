@@ -25,11 +25,15 @@ export interface AgentConfig {
   env?: Record<string, string>;
 
   // local-llm specific
-  endpoint?: string;         // e.g. 'http://localhost:8000/v1'
-  model?: string;            // e.g. 'Goedel-LM/Goedel-Prover-V2-8B'
+  endpoint?: string;         // e.g. 'http://localhost:8000/v1' or 'http://localhost:11434' for Ollama native
+  model?: string;            // e.g. 'Goedel-LM/Goedel-Prover-V2-8B' or 'qwen3.5:35b'
   maxTokens?: number;
   temperature?: number;
   systemPrompt?: string;     // injected as system message
+  /** Provider API format: 'openai' (default) or 'ollama' for Ollama's native /api/chat. */
+  provider?: 'openai' | 'ollama';
+  /** Disable thinking mode for reasoning models (Qwen 3.5, DeepSeek-R1). Ollama-only. */
+  disableThinking?: boolean;
 }
 
 export interface AgentResult {

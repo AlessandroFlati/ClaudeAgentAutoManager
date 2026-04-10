@@ -670,6 +670,8 @@ export class DagExecutor {
       agentConfig.endpoint = nodeDef?.endpoint;
       agentConfig.model = nodeDef?.model;
       agentConfig.maxTokens = nodeDef?.max_tokens;
+      agentConfig.provider = nodeDef?.provider;
+      agentConfig.disableThinking = nodeDef?.disable_thinking;
     }
 
     const info = await this.registry.spawn(agentConfig);
@@ -697,20 +699,22 @@ export class DagExecutor {
       this.bootstrap.regenerateAgentsList(this.registry.listWithPurpose());
 
     } else if ((backendType === 'process' || backendType === 'local-llm') && session) {
-      // Non-PTY backends: inject purpose directly
-      // For process: purpose is available via CAAM_PURPOSE_FILE env var
-      // For local-llm: purpose is the prompt
-      if (backendType === 'local-llm') {
-        session.inject(purpose);
-      }
-
-      // Generate signal from result when process/llm exits
+      // Register exit handler FIRST so we don't miss fast completions
       session.onExit(() => {
         const result = session.getResult();
         if (result && node.state === 'running') {
           this.generateSignalFromResult(nodeName, agentName, result);
         }
       });
+
+      // Non-PTY backends: inject purpose directly
+      // For process: purpose is available via CAAM_PURPOSE_FILE env var
+      // For local-llm: purpose is the prompt (Promise runs in background)
+      if (backendType === 'local-llm') {
+        session.inject(purpose).catch(err => {
+          console.error(`[local-llm] inject failed for ${agentName}:`, err);
+        });
+      }
     }
 
     // Attach log capture

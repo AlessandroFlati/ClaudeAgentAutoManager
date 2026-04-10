@@ -664,20 +664,15 @@ export class DagExecutor {
       // PTY: trigger deferred command via resize, then wait for readiness
       await session.resize(120, 30);
 
+      // Inject purpose prompt once Claude Code's input is ready.
+      // Note: /compact removed — Claude Code v2.1.100+ has slash autocomplete
+      // that interferes with programmatic injection. Effort level is a no-op now.
       const injectPurpose = () => {
-        const effort = nodeDef?.effort ?? 'low';
-        if (effort === 'low') {
-          session.write('/compact\r');
-          setTimeout(() => {
-            session.write(this.bootstrap.getInjectionPrompt(agentName));
-          }, 500);
-        } else {
-          session.write(this.bootstrap.getInjectionPrompt(agentName));
-        }
+        session.write(this.bootstrap.getInjectionPrompt(agentName));
       };
 
       waitForOutput(session, /bypass permissions|>\s*$/i, { timeout: 30000 })
-        .then(() => setTimeout(() => injectPurpose(), 1000))
+        .then(() => setTimeout(() => injectPurpose(), 2000))
         .catch(() => injectPurpose());
 
       // Agent bootstrap files

@@ -1,16 +1,12 @@
 /**
  * AgentRegistry — manages all agent backends (claude-code, process, local-llm).
- *
- * Replaces TerminalRegistry as the central session manager. The existing
- * TerminalRegistry API is preserved for backward compatibility — manual spawns
- * from the UI still create claude-code sessions via the same interface.
  */
 
-import type { AgentBackend, AgentConfig, AgentInfo, BackendType } from './agent-backend.js';
+import type { AgentBackend, AgentConfig, AgentInfo } from './agent-backend.js';
 import { ClaudeCodeSession } from './claude-code-session.js';
 import { ProcessSession } from './process-session.js';
 import { LocalLlmSession } from './local-llm-session.js';
-import type { TerminalConfig, TerminalInfo } from './types.js';
+import type { TerminalConfig } from './types.js';
 import { DEFAULT_COMMAND } from './types.js';
 
 type SpawnCallback = (name: string, purpose: string) => void;
@@ -163,28 +159,4 @@ export class AgentRegistry {
     };
   }
 
-  /**
-   * Get the underlying TerminalInfo for a claude-code session (backward compat for WebSocket).
-   * Returns undefined for non-claude-code backends.
-   */
-  getTerminalInfo(id: string): TerminalInfo | undefined {
-    const session = this.sessions.get(id);
-    if (session instanceof ClaudeCodeSession) {
-      return session.getTerminalSession().info;
-    }
-    return undefined;
-  }
-
-  /**
-   * List only claude-code sessions as TerminalInfo (backward compat for WebSocket terminal:list).
-   */
-  listTerminals(): TerminalInfo[] {
-    const result: TerminalInfo[] = [];
-    for (const session of this.sessions.values()) {
-      if (session instanceof ClaudeCodeSession) {
-        result.push(session.getTerminalSession().info);
-      }
-    }
-    return result;
-  }
 }

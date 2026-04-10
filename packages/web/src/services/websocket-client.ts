@@ -19,7 +19,6 @@ export class WebSocketClient {
 
     this.ws.onopen = () => {
       console.log('WebSocket connected');
-      this.send({ type: 'terminal:list' });
     };
 
     this.ws.onmessage = (event) => {

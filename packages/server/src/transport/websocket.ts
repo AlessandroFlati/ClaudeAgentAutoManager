@@ -22,8 +22,6 @@ export function createWebSocketServer(
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (ws) => {
-    const cleanups: Array<() => void> = [];
-
     ws.on('message', async (raw) => {
       let msg: ClientMessage;
       try {
@@ -34,20 +32,13 @@ export function createWebSocketServer(
       }
 
       try {
-        await handleMessage(ws, msg, registry, cleanups, bootstrap, presetRepo, workflowRepo, projectRoot);
+        await handleMessage(ws, msg, registry, bootstrap, presetRepo, workflowRepo, projectRoot);
       } catch (err) {
         sendMessage(ws, {
           type: 'error',
           message: err instanceof Error ? err.message : 'Unknown error',
         });
       }
-    });
-
-    ws.on('close', () => {
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
-      cleanups.length = 0;
     });
   });
 
@@ -58,108 +49,12 @@ async function handleMessage(
   ws: WebSocket,
   msg: ClientMessage,
   registry: AgentRegistry,
-  cleanups: Array<() => void>,
   bootstrap: AgentBootstrap,
   presetRepo: PresetRepository,
   workflowRepo: WorkflowRepository,
   projectRoot: string,
 ): Promise<void> {
   switch (msg.type) {
-    case 'terminal:spawn': {
-      if (msg.cwd) {
-        bootstrap.setCwd(msg.cwd);
-      }
-      const info = await registry.spawn({
-        name: msg.name,
-        command: msg.command,
-        cwd: msg.cwd,
-        purpose: msg.purpose,
-      });
-      if (msg.purpose && msg.name) {
-        bootstrap.createAgentFiles(msg.name, msg.purpose);
-        bootstrap.regenerateAgentsList(registry.listWithPurpose());
-        const session = registry.get(info.id);
-        if (session) {
-          setTimeout(() => {
-            session.write(bootstrap.getInjectionPrompt(msg.name!));
-          }, 2000);
-        }
-      }
-      if (msg.presetId) {
-        presetRepo.incrementUseCount(msg.presetId);
-      }
-      sendMessage(ws, {
-        type: 'terminal:created',
-        terminalId: info.id,
-        name: info.name,
-      });
-      break;
-    }
-
-    case 'terminal:input': {
-      const session = registry.get(msg.terminalId);
-      if (!session) {
-        sendMessage(ws, { type: 'error', message: `Terminal not found: ${msg.terminalId}` });
-        return;
-      }
-      session.write(msg.data);
-      break;
-    }
-
-    case 'terminal:resize': {
-      const session = registry.get(msg.terminalId);
-      if (!session) {
-        sendMessage(ws, { type: 'error', message: `Terminal not found: ${msg.terminalId}` });
-        return;
-      }
-      await session.resize(msg.cols, msg.rows);
-      break;
-    }
-
-    case 'terminal:kill': {
-      await registry.kill(msg.terminalId);
-      break;
-    }
-
-    case 'terminal:subscribe': {
-      const session = registry.get(msg.terminalId);
-      if (!session) {
-        sendMessage(ws, { type: 'error', message: `Terminal not found: ${msg.terminalId}` });
-        return;
-      }
-      // Trigger resize refresh for PTY terminals (forces xterm.js re-render)
-      const termInfo = registry.getTerminalInfo(msg.terminalId);
-      if (termInfo) {
-        await session.resize(termInfo.cols, termInfo.rows + 1);
-        await session.resize(termInfo.cols, termInfo.rows);
-      }
-
-      const unsubData = session.onOutput((data: string) => {
-        sendMessage(ws, {
-          type: 'terminal:output',
-          terminalId: msg.terminalId,
-          data,
-        });
-      });
-      const unsubExit = session.onExit(() => {
-        sendMessage(ws, {
-          type: 'terminal:exited',
-          terminalId: msg.terminalId,
-          exitCode: 0,
-        });
-      });
-      cleanups.push(unsubData, unsubExit);
-      break;
-    }
-
-    case 'terminal:list': {
-      sendMessage(ws, {
-        type: 'terminal:list',
-        terminals: registry.listTerminals(),
-      });
-      break;
-    }
-
     case 'workflow:start': {
       // Validate input manifest if provided
       if (msg.inputManifest) {
@@ -171,6 +66,11 @@ async function handleMessage(
       }
 
       const config = parseWorkflow(msg.yamlContent);
+
+      // Populate _yamlPath so the plugin can be resolved relative to the workflow directory
+      if (msg.yamlPath) {
+        config._yamlPath = msg.yamlPath;
+      }
 
       // Merge config overrides from input manifest
       if (msg.inputManifest?.config_overrides) {

@@ -2,3 +2,31 @@ node_modules/
 dist/
 .idea/
 *.tsbuildinfo
+
+# Vite cache
+.vite/
+
+# Generated per-workspace data (runs, shared symlinks, agents)
+.caam/
+.plurics/
+test-data/.caam/
+test-data/.plurics/
+
+# Lean project generated state
+test-data/lean-project/.lake/
+test-data/lean-project/lake-manifest.json
+test-data/lean-project/T-*-last-error.txt
+
+# Orphan test scripts (transient debugging)
+test-data/_*.py
+test-data/_abort*.js
+test-data/abort*.js
+test-data/test-goedel*.js
+test-data/monitor.js
+
+# Spurious server-relative directory
+packages/server/UsersalessPycharmProjectsClaudeAgentAutoManager/
+
+# Editor
+.vscode/
+.claude/

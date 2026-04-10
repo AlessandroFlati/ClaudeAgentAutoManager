@@ -26,10 +26,6 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/api/terminals', (_req, res) => {
-  res.json(registry.list());
-});
-
 app.post('/api/validate-path', (req, res) => {
   const { path } = req.body;
   if (!path || typeof path !== 'string') {
@@ -233,7 +229,7 @@ app.get('/api/workflow-files/:name', (req, res) => {
   }
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
-    res.json({ name: req.params.name, content });
+    res.json({ name: req.params.name, content, path: filePath });
   } catch {
     res.status(404).json({ error: 'File not found' });
   }

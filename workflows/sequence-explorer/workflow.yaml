@@ -68,6 +68,7 @@ nodes:
 
   sequence_fetch:
     preset: sequence-explorer/sequence-fetcher
+    kind: reasoning
     backend: process
     command: ["py", ".plurics/tools/sequence_fetcher.py"]
     working_dir: "{{WORKSPACE}}"
@@ -80,6 +81,7 @@ nodes:
 
   profiler:
     preset: sequence-explorer/profiler
+    kind: reasoning
     backend: claude-code
     model: sonnet
     depends_on: [sequence_fetch]
@@ -90,6 +92,7 @@ nodes:
 
   conjecturer:
     preset: sequence-explorer/conjecturer
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on: [profiler]
@@ -103,6 +106,7 @@ nodes:
 
   formalizer:
     preset: sequence-explorer/formalizer
+    kind: reasoning
     backend: claude-code
     model: sonnet
     depends_on: [conjecturer]
@@ -110,6 +114,7 @@ nodes:
 
   quick_filter:
     preset: sequence-explorer/quick-filter
+    kind: reasoning
     backend: local-llm
     endpoint: http://localhost:11434
     provider: ollama
@@ -122,6 +127,7 @@ nodes:
 
   verifier:
     preset: sequence-explorer/verifier
+    kind: reasoning
     backend: process
     command: ["py", ".plurics/tools/verifier.py"]
     working_dir: "{{WORKSPACE}}"
@@ -131,6 +137,7 @@ nodes:
 
   cross_checker:
     preset: sequence-explorer/cross-checker
+    kind: reasoning
     backend: process
     command: ["py", ".plurics/tools/cross_checker.py"]
     working_dir: "{{WORKSPACE}}"
@@ -140,6 +147,7 @@ nodes:
 
   critic:
     preset: sequence-explorer/critic
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on: [cross_checker]
@@ -151,6 +159,7 @@ nodes:
 
   selector:
     preset: sequence-explorer/selector
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on_all: [critic]           # Wait for all conjectures in current round
@@ -163,6 +172,7 @@ nodes:
 
   reporter:
     preset: sequence-explorer/reporter
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on: [selector]

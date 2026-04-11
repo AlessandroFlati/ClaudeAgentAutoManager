@@ -7,4 +7,6 @@ export interface SeedToolDef {
   relPath: string; // Relative path from this file to tool.yaml
 }
 
-export const SEED_TOOLS: SeedToolDef[] = [];
+export const SEED_TOOLS: SeedToolDef[] = [
+  { name: 'stats.mean', relPath: './tools/stats.mean/tool.yaml' },
+];

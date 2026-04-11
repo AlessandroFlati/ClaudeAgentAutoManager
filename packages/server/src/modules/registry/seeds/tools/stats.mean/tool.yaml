@@ -1,0 +1,15 @@
+name: stats.mean
+version: 1
+description: Compute the arithmetic mean of a list of numbers.
+inputs:
+  values:
+    schema: JsonArray
+    required: true
+    description: List of numeric values.
+outputs:
+  mean:
+    schema: Float
+    description: Arithmetic mean of the input values.
+implementation:
+  language: python
+  entry_point: tool.py:run

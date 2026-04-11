@@ -1,0 +1,16 @@
+name: test.echo_int
+version: 1
+description: Echo an integer unchanged.
+category: testing
+inputs:
+  value:
+    schema: Integer
+    required: true
+    description: value to echo
+outputs:
+  echoed:
+    schema: Integer
+    description: same as input
+implementation:
+  language: python
+  entry_point: tool.py:run

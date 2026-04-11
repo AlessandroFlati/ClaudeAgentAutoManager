@@ -23,6 +23,7 @@ import { SchemaRegistry } from './schemas/schema-registry.js';
 import { BUILTIN_SCHEMAS } from './schemas/builtin.js';
 import { parseToolManifest, ManifestParseError } from './manifest/parser.js';
 import { validateToolManifest } from './manifest/validator.js';
+import { invokeTool } from './execution/executor.js';
 
 export class RegistryClient {
   private readonly layout: RegistryLayout;
@@ -377,10 +378,27 @@ export class RegistryClient {
     return { ...record, directory: this.layout.toolVersionDir(record.name, record.version) };
   }
 
-  // Stubs filled in by subsequent tasks.
-
-  invoke(_request: InvocationRequest): Promise<InvocationResult> {
-    throw new Error('invoke() not implemented');
+  async invoke(request: InvocationRequest): Promise<InvocationResult> {
+    const tool = this.get(request.toolName, request.version);
+    if (!tool) {
+      return {
+        success: false,
+        error: {
+          category: 'tool_not_found',
+          message: `tool ${request.toolName}${request.version ? ` v${request.version}` : ''} not found`,
+        },
+        metrics: { durationMs: 0 },
+      };
+    }
+    return invokeTool(
+      {
+        schemas: this.schemas,
+        runnerPath: this.layout.runnerPath,
+        pythonPath: this.resolvedPythonPath,
+      },
+      tool,
+      request,
+    );
   }
 
   async rebuildFromFilesystem(): Promise<void> {

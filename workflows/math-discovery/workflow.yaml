@@ -73,6 +73,7 @@ nodes:
 
   ohlc_fetch:
     preset: research/math-discovery/ohlc-fetcher
+    kind: reasoning
     backend: process
     command: ["py", "-m", "ohlc_fetcher"]
     working_dir: "{{WORKSPACE}}"
@@ -81,12 +82,14 @@ nodes:
 
   profiler:
     preset: research/math-discovery/profiler
+    kind: reasoning
     backend: claude-code
     model: sonnet
     depends_on: [ohlc_fetch]
 
   conjecturer:
     preset: research/math-discovery/conjecturer
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on: [profiler]
@@ -94,12 +97,14 @@ nodes:
 
   critic:
     preset: research/math-discovery/critic
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on: [conjecturer]
 
   selector:
     preset: research/math-discovery/selector
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on: [critic]
@@ -114,12 +119,14 @@ nodes:
 
   formalizer:
     preset: research/math-discovery/formalizer
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on: [selector]
 
   strategist:
     preset: research/math-discovery/strategist
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on: [formalizer]
@@ -129,6 +136,7 @@ nodes:
     # loop internally (up to prover_max_self_corrections rounds). From the DAG's
     # perspective, this is a single node that either succeeds, fails, or times out.
     preset: research/math-discovery/prover
+    kind: reasoning
     backend: local-llm
     endpoint: http://localhost:8000/v1
     model: Goedel-LM/Goedel-Prover-V2-8B
@@ -145,6 +153,7 @@ nodes:
 
   counterexample:
     preset: research/math-discovery/counterexample
+    kind: reasoning
     backend: claude-code
     model: sonnet
     depends_on: [prover]
@@ -156,12 +165,14 @@ nodes:
 
   abstractor:
     preset: research/math-discovery/abstractor
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on: [prover, counterexample]  # OR-dependency (handled by plugin)
 
   synthesizer:
     preset: research/math-discovery/synthesizer
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on_all: [abstractor]   # Wait for all scoped abstractors
@@ -177,12 +188,14 @@ nodes:
 
   backtest_designer:
     preset: research/math-discovery/backtest-designer
+    kind: reasoning
     backend: claude-code
     model: opus
     depends_on: [synthesizer]
 
   backtester:
     preset: research/math-discovery/backtester
+    kind: reasoning
     backend: process
     command: ["py", "-m", "backtester"]
     working_dir: "{{WORKSPACE}}"

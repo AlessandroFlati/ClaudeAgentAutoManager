@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { RegistryClient } from '../registry-client.js';
 import { SEED_TOOLS } from './manifest.js';
 
@@ -9,9 +8,6 @@ export interface SeedLoadResult {
   failed: number;
   errors: Array<{ name: string; error: string }>;
 }
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export async function loadSeedTools(client: RegistryClient): Promise<SeedLoadResult> {
   let registered = 0;

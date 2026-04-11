@@ -658,11 +658,13 @@ export class DagExecutor {
     const backendType = nodeDef?.backend ?? 'claude-code';
 
     // Build AgentConfig based on backend type
+    // New backend values ('claude', 'openai-compat', 'ollama') are handled in Task 8;
+    // for now, cast to BackendType — the dispatch branch will be added in the next task.
     const agentConfig: AgentConfig = {
       name: agentName,
       cwd: this.workspacePath,
       purpose,
-      backend: backendType,
+      backend: backendType as import('../agents/agent-backend.js').BackendType,
     };
 
     if (backendType === 'claude-code') {

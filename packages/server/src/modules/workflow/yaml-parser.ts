@@ -77,9 +77,45 @@ function validateNodeGraph(nodes: Record<string, WorkflowNodeDef>): void {
     if (node.next && !nodeNames.has(node.next)) {
       throw new Error(`Node "${name}" has next="${node.next}" which doesn't exist`);
     }
+
+    validateNodeKind(name, node);
   }
 
   detectCycles(nodes);
+}
+
+function validateNodeKind(name: string, node: WorkflowNodeDef): void {
+  if (node.kind === undefined || node.kind === null) {
+    throw new Error(`Node "${name}": missing required field 'kind'`);
+  }
+  if (node.kind !== 'reasoning' && node.kind !== 'tool') {
+    throw new Error(
+      `Node "${name}": invalid kind '${node.kind}', expected 'reasoning' or 'tool'`
+    );
+  }
+  if (node.kind === 'tool' && !node.tool) {
+    throw new Error(`Node "${name}": kind is 'tool' but tool field required`);
+  }
+  if (node.toolset !== undefined) {
+    validateToolset(name, node.toolset as unknown[]);
+  }
+}
+
+function validateToolset(nodeName: string, toolset: unknown[]): void {
+  for (const entry of toolset) {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error(`Node "${nodeName}": toolset entry must be an object`);
+    }
+    const e = entry as Record<string, unknown>;
+    const hasName = 'name' in e && typeof e['name'] === 'string';
+    const hasCategory = 'category' in e && typeof e['category'] === 'string';
+    const hasGlob = 'glob' in e && typeof e['glob'] === 'string';
+    if (!hasName && !hasCategory && !hasGlob) {
+      throw new Error(
+        `Node "${nodeName}": toolset entry must have 'name', 'category', or 'glob' field`
+      );
+    }
+  }
 }
 
 function detectCycles(nodes: Record<string, WorkflowNodeDef>): void {

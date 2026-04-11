@@ -13,11 +13,14 @@ shared_context: "Test context"
 nodes:
   ingestor:
     preset: data-ingestor
+    kind: reasoning
   profiler:
     preset: data-profiler
+    kind: reasoning
     depends_on: [ingestor]
   analyst:
     preset: analyst
+    kind: reasoning
     depends_on: [profiler]
 `;
 
@@ -53,6 +56,7 @@ config:
 nodes:
   a:
     preset: preset-a
+    kind: reasoning
     depends_on: [nonexistent]
 `;
     expect(() => parseWorkflow(yaml)).toThrow('depends on unknown node "nonexistent"');
@@ -70,6 +74,7 @@ config:
 nodes:
   a:
     preset: preset-a
+    kind: reasoning
     branch:
       - condition: "always"
         goto: nonexistent
@@ -89,9 +94,11 @@ config:
 nodes:
   a:
     preset: preset-a
+    kind: reasoning
     depends_on: [b]
   b:
     preset: preset-b
+    kind: reasoning
     depends_on: [a]
 `;
     expect(() => parseWorkflow(yaml)).toThrow('Cycle detected');
@@ -109,6 +116,7 @@ config:
 nodes:
   a:
     preset: preset-a
+    kind: reasoning
 `;
     const config = parseWorkflow(yaml);
     expect(config.shared_context).toBe('');
@@ -125,8 +133,136 @@ config:
   agent_timeout_seconds: 300
 nodes:
   a:
+    kind: reasoning
     depends_on: []
 `;
     expect(() => parseWorkflow(yaml)).toThrow('must have a "preset" string');
+  });
+});
+
+// ---- kind field tests ----
+
+const VALID_YAML_WITH_KIND = `
+name: kind-test
+version: 1
+config:
+  agent_timeout_seconds: 300
+shared_context: ""
+nodes:
+  reasoning_node:
+    preset: some/preset
+    kind: reasoning
+  tool_node:
+    preset: some/preset
+    kind: tool
+    tool: test.echo_int
+    depends_on: [reasoning_node]
+`;
+
+describe('kind field validation', () => {
+  it('accepts kind: reasoning on a node', () => {
+    const yaml = `
+name: t
+version: 1
+config:
+  agent_timeout_seconds: 300
+shared_context: ""
+nodes:
+  n:
+    preset: p
+    kind: reasoning
+`;
+    expect(() => parseWorkflow(yaml)).not.toThrow();
+    const cfg = parseWorkflow(yaml);
+    expect(cfg.nodes['n'].kind).toBe('reasoning');
+  });
+
+  it('accepts kind: tool with tool field present', () => {
+    const cfg = parseWorkflow(VALID_YAML_WITH_KIND);
+    expect(cfg.nodes['tool_node'].kind).toBe('tool');
+    expect(cfg.nodes['tool_node'].tool).toBe('test.echo_int');
+  });
+
+  it('rejects node with missing kind field', () => {
+    const yaml = `
+name: t
+version: 1
+config:
+  agent_timeout_seconds: 300
+shared_context: ""
+nodes:
+  n:
+    preset: p
+`;
+    expect(() => parseWorkflow(yaml)).toThrow("missing required field 'kind'");
+  });
+
+  it('rejects node with invalid kind value', () => {
+    const yaml = `
+name: t
+version: 1
+config:
+  agent_timeout_seconds: 300
+shared_context: ""
+nodes:
+  n:
+    preset: p
+    kind: agent
+`;
+    expect(() => parseWorkflow(yaml)).toThrow("invalid kind 'agent'");
+  });
+
+  it('rejects kind: tool node without tool field', () => {
+    const yaml = `
+name: t
+version: 1
+config:
+  agent_timeout_seconds: 300
+shared_context: ""
+nodes:
+  n:
+    preset: p
+    kind: tool
+`;
+    expect(() => parseWorkflow(yaml)).toThrow("tool field required");
+  });
+
+  it('parses toolset on reasoning nodes when present', () => {
+    const yaml = `
+name: t
+version: 1
+config:
+  agent_timeout_seconds: 300
+shared_context: ""
+nodes:
+  n:
+    preset: p
+    kind: reasoning
+    toolset:
+      - name: pandas.load_csv
+      - category: math
+`;
+    const cfg = parseWorkflow(yaml);
+    expect(cfg.nodes['n'].toolset).toEqual([
+      { name: 'pandas.load_csv' },
+      { category: 'math' },
+    ]);
+  });
+
+  it('rejects invalid toolset entry (neither name nor category nor glob)', () => {
+    const yaml = `
+name: t
+version: 1
+config:
+  agent_timeout_seconds: 300
+shared_context: ""
+nodes:
+  n:
+    preset: p
+    kind: reasoning
+    toolset:
+      - invalid_field: something
+`;
+    expect(() => parseWorkflow(yaml)).toThrow();
   });
 });

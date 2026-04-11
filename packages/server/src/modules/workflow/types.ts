@@ -55,6 +55,10 @@ export interface DagNode {
   timeoutTimer: ReturnType<typeof setTimeout> | null;
   signal: SignalFile | null;
   startedAt: number | null;
+  kind?: 'reasoning' | 'tool';
+  tool?: string;
+  toolInputs?: Record<string, unknown>;
+  toolset?: ToolsetEntry[];
 }
 
 // --- Workflow YAML Types ---
@@ -95,8 +99,18 @@ export interface WorkflowNodeDef {
   model?: 'opus' | 'sonnet' | 'haiku';
   effort?: 'low' | 'medium' | 'high';
 
+  // Node kind — required on every node
+  kind?: 'reasoning' | 'tool';
+
+  // kind: tool — registry tool reference
+  tool?: string;               // e.g. 'pandas.load_csv'
+  toolInputs?: Record<string, unknown>;
+
+  // kind: reasoning — optional toolset declaration (Phase 1: parsed, not used)
+  toolset?: ToolsetEntry[];
+
   // Agent backend type (default: 'claude-code')
-  backend?: 'claude-code' | 'process' | 'local-llm';
+  backend?: 'claude-code' | 'process' | 'local-llm' | 'claude' | 'openai-compat' | 'ollama';
   // process backend: command to execute
   command?: string[];
   // process backend: working directory override
@@ -110,6 +124,11 @@ export interface WorkflowNodeDef {
   // local-llm backend: disable thinking mode (Ollama only, for Qwen/DeepSeek-R1)
   disable_thinking?: boolean;
 }
+
+export type ToolsetEntry =
+  | { name: string; category?: never; glob?: never }
+  | { category: string; name?: never; glob?: never }
+  | { glob: string; name?: never; category?: never };
 
 // --- State Transitions ---
 

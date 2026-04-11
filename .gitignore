@@ -9,6 +9,9 @@ dist/
 # Generated per-workspace data (runs, shared symlinks, agents)
 .caam/
 .plurics/
+
+# Git worktrees for feature work
+.worktrees/
 test-data/.caam/
 test-data/.plurics/
 

@@ -1,7 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import type {
   RegistryClientOptions,
@@ -66,8 +65,7 @@ export class RegistryClient {
   }
 
   private deployRunner(): void {
-    const here = path.dirname(fileURLToPath(import.meta.url));
-    const source = path.resolve(here, 'python', 'runner.py');
+    const source = path.resolve(__dirname, 'python', 'runner.py');
     const dest = this.layout.runnerPath;
     const sourceBytes = fs.readFileSync(source);
     const sourceHash = createHash('sha256').update(sourceBytes).digest('hex');

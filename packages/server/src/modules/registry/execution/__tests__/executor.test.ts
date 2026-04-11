@@ -3,11 +3,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { RegistryClient } from '../../registry-client.js';
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURES = path.resolve(HERE, '..', '..', '__tests__', 'fixtures');
+const FIXTURES = path.resolve(__dirname, '..', '..', '__tests__', 'fixtures');
 
 function pythonAvailable(): boolean {
   const candidates = process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python'];

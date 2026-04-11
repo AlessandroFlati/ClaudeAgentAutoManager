@@ -13,4 +13,5 @@ export const SEED_TOOLS: SeedToolDef[] = [
   { name: 'json.load', relPath: './tools/json.load/tool.yaml' },
   { name: 'json.dump', relPath: './tools/json.dump/tool.yaml' },
   { name: 'pandas.load_csv', relPath: './tools/pandas.load_csv/tool.yaml' },
+  { name: 'pandas.save_csv', relPath: './tools/pandas.save_csv/tool.yaml' },
 ];

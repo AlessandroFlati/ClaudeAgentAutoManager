@@ -24,7 +24,7 @@ describe('loadSeedTools — unit (no Python required)', () => {
     const result = await loadSeedTools(client);
     // With empty manifest, zero registered is correct.
     // This count will be updated as tools are added in tasks 4-13.
-    expect(result.registered).toBe(5);
+    expect(result.registered).toBe(6);
     expect(result.skipped).toBe(0);
     expect(result.failed).toBe(0);
     expect(result.errors).toHaveLength(0);
@@ -41,13 +41,17 @@ describe('loadSeedTools — unit (no Python required)', () => {
     const producers = client.findProducers('DataFrame');
     const producerNames = producers.map((t) => t.name);
     expect(producerNames).toContain('pandas.load_csv');
+
+    const consumers = client.findConsumers('DataFrame');
+    const consumerNames = consumers.map((t) => t.name);
+    expect(consumerNames).toContain('pandas.save_csv');
   });
 
   it('second call is a pure no-op (idempotent)', async () => {
     await loadSeedTools(client);
     const result2 = await loadSeedTools(client);
     expect(result2.registered).toBe(0);
-    expect(result2.skipped).toBe(5);
+    expect(result2.skipped).toBe(6);
     expect(result2.failed).toBe(0);
   });
 });

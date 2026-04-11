@@ -1,0 +1,15 @@
+name: pandas.load_csv
+version: 1
+description: Load a CSV file from disk into a pandas DataFrame.
+inputs:
+  path:
+    schema: String
+    required: true
+    description: Absolute or relative path to the CSV file.
+outputs:
+  df:
+    schema: DataFrame
+    description: The loaded pandas DataFrame.
+implementation:
+  language: python
+  entry_point: tool.py:run

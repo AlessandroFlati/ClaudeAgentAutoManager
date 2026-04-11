@@ -12,4 +12,5 @@ export const SEED_TOOLS: SeedToolDef[] = [
   { name: 'stats.fft',  relPath: './tools/stats.fft/tool.yaml' },
   { name: 'json.load', relPath: './tools/json.load/tool.yaml' },
   { name: 'json.dump', relPath: './tools/json.dump/tool.yaml' },
+  { name: 'pandas.load_csv', relPath: './tools/pandas.load_csv/tool.yaml' },
 ];

@@ -281,7 +281,7 @@ app.get('/api/workflows/runs/:runId/findings', (req, res) => {
   }
 });
 
-createWebSocketServer(server, registry, bootstrap, presetRepo, workflowRepo, projectRoot);
+createWebSocketServer(server, registry, bootstrap, presetRepo, workflowRepo, projectRoot, toolRegistry);
 
 registry.onTerminalExit(() => {
   bootstrap.regenerateAgentsList(registry.listWithPurpose());

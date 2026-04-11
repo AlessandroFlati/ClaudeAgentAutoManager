@@ -18,9 +18,13 @@ import { resolvePresetContent, resolvePlaceholders } from './preset-resolver.js'
 import type { WorkflowPlugin } from './sdk.js';
 import { EvolutionaryPool } from './evolutionary-pool.js';
 import type { AgentRegistry } from '../agents/agent-registry.js';
-import type { LegacyAgentBackend, AgentConfig } from '../agents/agent-backend.js';
+import type { LegacyAgentBackend, AgentConfig, AgentBackend as NewAgentBackend } from '../agents/agent-backend.js';
 import type { AgentBootstrap } from '../knowledge/agent-bootstrap.js';
 import type { PresetRepository } from '../../db/preset-repository.js';
+import type { RegistryClient } from '../registry/index.js';
+import { ClaudeBackend } from '../agents/claude-backend.js';
+import { OpenAICompatBackend } from '../agents/openai-compat-backend.js';
+import { OllamaBackend } from '../agents/ollama-backend.js';
 
 type StateChangeCallback = (
   runId: string, node: string, fromState: NodeState, toState: NodeState, event: string, terminalId?: string
@@ -55,6 +59,7 @@ export class DagExecutor {
   private activeSubDags: number = 0;
   private paused: boolean = false;
   private readonly pool = new EvolutionaryPool();
+  private readonly registryClient: RegistryClient | null;
 
   constructor(
     workflowConfig: WorkflowConfig,
@@ -63,6 +68,7 @@ export class DagExecutor {
     registry: AgentRegistry,
     bootstrap: AgentBootstrap,
     presetRepo: PresetRepository,
+    registryClient?: RegistryClient,   // optional for backward compat
   ) {
     this.workflowConfig = workflowConfig;
     this.workspacePath = workspacePath;
@@ -70,6 +76,7 @@ export class DagExecutor {
     this.registry = registry;
     this.bootstrap = bootstrap;
     this.presetRepo = presetRepo;
+    this.registryClient = registryClient ?? null;
     this.signalWatcher = new SignalWatcher();
     this.runId = `run-${Date.now()}-${randomHex(4)}`;
   }
@@ -202,6 +209,7 @@ export class DagExecutor {
         preset: ns.preset,
         state: ns.state,
         scope: ns.scope,
+        kind: 'reasoning', // safe default for snapshots predating NR Phase 1
         dependsOn: [...ns.dependsOn],
         terminalId: null, // Terminals are gone
         retryCount: ns.retryCount,
@@ -439,6 +447,9 @@ export class DagExecutor {
         preset: nodeDef.preset,
         state: 'pending',
         scope: null,
+        kind: nodeDef.kind ?? 'reasoning',
+        tool: nodeDef.tool,
+        toolInputs: nodeDef.toolInputs,
         dependsOn: nodeDef.depends_on ?? [],
         terminalId: null,
         retryCount: 0,
@@ -656,10 +667,33 @@ export class DagExecutor {
       : nodeName;
     const nodeDef = this.workflowConfig.nodes[baseName] ?? this.workflowConfig.nodes[nodeName];
     const backendType = nodeDef?.backend ?? 'claude-code';
+    const kind = nodeDef?.kind ?? node.kind ?? 'reasoning';
+
+    // ---- NEW BACKEND DISPATCH (kind: tool or kind: reasoning + new backend) ----
+
+    if (kind === 'tool') {
+      // Transition spawning -> running so handleSignal accepts the written signal
+      node.terminalId = null;
+      node.startedAt = Date.now();
+      node.invocationCount++;
+      this.transition(nodeName, 'terminal_created');
+      await this.dispatchToolNode(nodeName, node, agentName, nodeDef);
+      return;
+    }
+
+    if (kind === 'reasoning' && (backendType === 'claude' || backendType === 'openai-compat' || backendType === 'ollama')) {
+      node.terminalId = null;
+      node.startedAt = Date.now();
+      node.invocationCount++;
+      this.transition(nodeName, 'terminal_created');
+      await this.dispatchNewReasoningNode(nodeName, node, agentName, nodeDef, purpose);
+      return;
+    }
+
+    // ---- LEGACY DISPATCH (kind: reasoning + claude-code/process/local-llm) ----
+    // Falls through to the existing agentConfig / registry.spawn path below.
 
     // Build AgentConfig based on backend type
-    // New backend values ('claude', 'openai-compat', 'ollama') are handled in Task 8;
-    // for now, cast to BackendType — the dispatch branch will be added in the next task.
     const agentConfig: AgentConfig = {
       name: agentName,
       cwd: this.workspacePath,
@@ -1203,5 +1237,158 @@ export class DagExecutor {
     if (this.onComplete) {
       this.onComplete(this.runId, summary);
     }
+  }
+
+  /**
+   * Dispatch a kind:tool node through RegistryClient.invoke().
+   * Phase 1: outputs are serialized naively to a signal file (no value store).
+   * Phase 2 will route outputs through the value store instead.
+   */
+  private async dispatchToolNode(
+    nodeName: string,
+    node: DagNode,
+    agentName: string,
+    nodeDef: import('./types.js').WorkflowNodeDef | undefined,
+  ): Promise<void> {
+    if (!this.registryClient) {
+      throw new Error(
+        `Node "${nodeName}" has kind:tool but DagExecutor was constructed without a RegistryClient. ` +
+        `Pass the registryClient parameter to enable tool node dispatch.`
+      );
+    }
+
+    const toolName = nodeDef?.tool;
+    if (!toolName) {
+      throw new Error(`Node "${nodeName}": kind is 'tool' but no tool field in YAML`);
+    }
+
+    const toolInputs = (nodeDef?.toolInputs as Record<string, unknown>) ?? {};
+
+    let invocationResult;
+    try {
+      invocationResult = await this.registryClient.invoke({
+        toolName,
+        inputs: toolInputs,
+        callerContext: {
+          workflowRunId: this.runId,
+          nodeName,
+          scope: node.scope,
+        },
+      });
+    } catch (err) {
+      invocationResult = {
+        success: false as const,
+        error: {
+          category: 'runtime' as const,
+          message: (err as Error).message,
+          stderr: '',
+        },
+        metrics: { durationMs: 0 },
+      };
+    }
+
+    const runDir = path.join(this.workspacePath, '.plurics', 'runs', this.runId);
+    const signalDir = path.join(runDir, 'signals');
+    await fs.mkdir(signalDir, { recursive: true });
+
+    const signal: SignalFile = {
+      schema_version: 1,
+      signal_id: `sig-${Date.now()}-${agentName}-${randomHex(2)}`,
+      agent: node.name.split('.')[0],
+      scope: node.scope,
+      status: invocationResult.success ? 'success' : 'failure',
+      decision: null,
+      outputs: invocationResult.success
+        ? Object.entries(invocationResult.outputs).map(([k, v]) => ({
+            path: `tool-outputs/${agentName}/${k}`,
+            sha256: 'tool-node-phase1-no-hash',
+            size_bytes: JSON.stringify(v).length,
+          }))
+        : [],
+      metrics: {
+        duration_seconds: invocationResult.metrics.durationMs / 1000,
+        retries_used: node.retryCount,
+      },
+      error: invocationResult.success ? null : {
+        category: invocationResult.error.category,
+        message: invocationResult.error.message,
+        recoverable: false,
+      },
+    };
+
+    const filename = `${agentName}.done.json`;
+    await writeJsonAtomic(path.join(signalDir, filename), signal);
+  }
+
+  /**
+   * Dispatch a kind:reasoning node through one of the new HTTP fetch backends
+   * (claude, openai-compat, ollama). The LLM's text response is treated as the
+   * node's raw output and processed by the existing signal-parsing path.
+   *
+   * Phase 1: toolDefinitions is always empty. The LLM will attempt to produce
+   * a Signal Protocol JSON block in its text output. Without tool access, this
+   * will fail for workflows that require bash commands. This is the documented
+   * capability regression — use backend:claude-code for live workflows until NR Phase 3.
+   */
+  private async dispatchNewReasoningNode(
+    nodeName: string,
+    node: DagNode,
+    agentName: string,
+    nodeDef: import('./types.js').WorkflowNodeDef | undefined,
+    purpose: string,
+  ): Promise<void> {
+    const backendType = nodeDef?.backend ?? 'claude-code';
+    let backend: NewAgentBackend;
+
+    if (backendType === 'claude') {
+      backend = new ClaudeBackend({
+        baseUrl: nodeDef?.endpoint ?? 'https://api.anthropic.com',
+        apiKey: process.env['ANTHROPIC_API_KEY'] ?? '',
+        model: nodeDef?.model ?? 'claude-sonnet-4-6',
+        maxTokens: nodeDef?.max_tokens,
+      });
+    } else if (backendType === 'openai-compat') {
+      backend = new OpenAICompatBackend({
+        baseUrl: nodeDef?.endpoint ?? 'http://localhost:8000',
+        apiKey: process.env['OPENAI_API_KEY'],
+        model: nodeDef?.model ?? 'gpt-4o',
+        maxTokens: nodeDef?.max_tokens,
+      });
+    } else if (backendType === 'ollama') {
+      backend = new OllamaBackend({
+        baseUrl: nodeDef?.endpoint ?? 'http://localhost:11434',
+        model: nodeDef?.model ?? 'qwen3.5:35b',
+        disableThinking: nodeDef?.disable_thinking,
+        maxTokens: nodeDef?.max_tokens,
+      });
+    } else {
+      throw new Error(`dispatchNewReasoningNode: unexpected backendType '${backendType}'`);
+    }
+
+    const handle = await backend.startConversation({
+      systemPrompt: this.workflowConfig.shared_context,
+      toolDefinitions: [],  // Phase 1: always empty
+      model: nodeDef?.model ?? backend.backendType,
+      maxTokens: nodeDef?.max_tokens,
+    });
+
+    let assistantMessage;
+    try {
+      assistantMessage = await backend.sendMessage(handle, { content: purpose });
+    } finally {
+      await backend.closeConversation(handle);
+    }
+
+    // Treat the LLM's text as the agent result and generate a signal from it
+    const result: import('../agents/agent-backend.js').AgentResult = {
+      success: true,
+      output: assistantMessage.content,
+      error: null,
+      exitCode: null,
+      durationMs: 0,
+      artifacts: [],
+    };
+
+    await this.generateSignalFromResult(nodeName, agentName, result);
   }
 }

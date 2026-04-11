@@ -5,6 +5,7 @@ import type { AgentRegistry } from '../modules/agents/agent-registry.js';
 import type { AgentBootstrap } from '../modules/knowledge/agent-bootstrap.js';
 import type { PresetRepository } from '../db/preset-repository.js';
 import type { WorkflowRepository } from '../db/workflow-repository.js';
+import type { RegistryClient } from '../modules/registry/index.js';
 import { DagExecutor } from '../modules/workflow/dag-executor.js';
 import { parseWorkflow } from '../modules/workflow/yaml-parser.js';
 import { validateInputManifest } from '../modules/workflow/input-validator.js';
@@ -18,6 +19,7 @@ export function createWebSocketServer(
   presetRepo: PresetRepository,
   workflowRepo: WorkflowRepository,
   projectRoot: string,
+  registryClient?: RegistryClient,
 ): WebSocketServer {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
@@ -32,7 +34,7 @@ export function createWebSocketServer(
       }
 
       try {
-        await handleMessage(ws, msg, registry, bootstrap, presetRepo, workflowRepo, projectRoot);
+        await handleMessage(ws, msg, registry, bootstrap, presetRepo, workflowRepo, projectRoot, registryClient);
       } catch (err) {
         sendMessage(ws, {
           type: 'error',
@@ -53,6 +55,7 @@ async function handleMessage(
   presetRepo: PresetRepository,
   workflowRepo: WorkflowRepository,
   projectRoot: string,
+  registryClient?: RegistryClient,
 ): Promise<void> {
   switch (msg.type) {
     case 'workflow:start': {
@@ -77,7 +80,7 @@ async function handleMessage(
         config.config = { ...config.config, ...msg.inputManifest.config_overrides } as typeof config.config;
       }
 
-      const executor = new DagExecutor(config, msg.workspacePath, projectRoot, registry, bootstrap, presetRepo);
+      const executor = new DagExecutor(config, msg.workspacePath, projectRoot, registry, bootstrap, presetRepo, registryClient);
 
       executor.setStateChangeHandler((runId, node, fromState, toState, event, terminalId) => {
         sendMessage(ws, { type: 'workflow:node-update', runId, node, fromState, toState, event, terminalId });
@@ -182,7 +185,7 @@ async function handleMessage(
 
       // Rebuild executor from stored YAML
       const config = parseWorkflow(run.yaml_content);
-      const executor = new DagExecutor(config, run.workspace_path, projectRoot, registry, bootstrap, presetRepo);
+      const executor = new DagExecutor(config, run.workspace_path, projectRoot, registry, bootstrap, presetRepo, registryClient);
 
       executor.setStateChangeHandler((runId, node, fromState, toState, event, terminalId) => {
         sendMessage(ws, { type: 'workflow:node-update', runId, node, fromState, toState, event, terminalId });

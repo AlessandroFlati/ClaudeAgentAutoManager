@@ -1,5 +1,26 @@
 // Public entry point for the Plurics Tool Registry module.
-// Everything internal to `registry/` stays internal; only the symbols
-// re-exported here are consumable from the rest of the server.
 
-export {};
+export { RegistryClient } from './registry-client.js';
+export type {
+  RegistryClientOptions,
+  ToolCaller,
+  PortDirection,
+  Stability,
+  CostClass,
+  ToolStatus,
+  SchemaDef,
+  SchemaKind,
+  SchemaEncoding,
+  SchemaSource,
+  ToolPortSpec,
+  ToolManifest,
+  ResolvedPort,
+  ToolRecord,
+  RegistrationRequest,
+  RegistrationError,
+  RegistrationResult,
+  ListFilters,
+  InvocationRequest,
+  InvocationErrorCategory,
+  InvocationResult,
+} from './types.js';

@@ -612,7 +612,30 @@ export class DagExecutor {
     const node = this.nodes.get(nodeName)!;
     this.transition(nodeName, 'spawn');
 
-    // Load and resolve preset content
+    // Scoped nodes (e.g. "cross_checker.C-002") don't exist as keys in the
+    // YAML; their config lives under the base name. Strip the scope suffix to
+    // recover the template node definition.
+    const baseName = node.scope && nodeName.endsWith(`.${node.scope}`)
+      ? nodeName.slice(0, -(node.scope.length + 1))
+      : nodeName;
+    const nodeDef = this.workflowConfig.nodes[baseName] ?? this.workflowConfig.nodes[nodeName];
+    const backendType = nodeDef?.backend ?? 'claude-code';
+    const kind = nodeDef?.kind ?? node.kind ?? 'reasoning';
+    const agentName = node.scope ? `${node.name}-${node.scope}` : node.name;
+
+    // ---- NEW BACKEND DISPATCH (kind: tool or kind: reasoning + new backend) ----
+
+    if (kind === 'tool') {
+      // Transition spawning -> running so handleSignal accepts the written signal
+      node.terminalId = null;
+      node.startedAt = Date.now();
+      node.invocationCount++;
+      this.transition(nodeName, 'terminal_created');
+      await this.dispatchToolNode(nodeName, node, agentName, nodeDef);
+      return;
+    }
+
+    // Load and resolve preset content (only for reasoning/legacy nodes)
     const rawPreset = resolvePresetContent(node.preset, this.projectRoot, this.presetRepo);
     const placeholders: Record<string, string | number> = {
       ROUND: node.invocationCount + 1,
@@ -640,8 +663,6 @@ export class DagExecutor {
       });
     }
 
-    const agentName = node.scope ? `${node.name}-${node.scope}` : node.name;
-
     // Token estimate (~4 chars per token heuristic)
     const purposeTokens = Math.round(purpose.length / 4);
     this.eventLog.push({
@@ -665,28 +686,6 @@ export class DagExecutor {
     this.bootstrap.setCwd(this.workspacePath);
     this.bootstrap.createAgentFiles(agentName, purpose);
     this.bootstrap.regenerateAgentsList(this.registry.listWithPurpose());
-
-    // Scoped nodes (e.g. "cross_checker.C-002") don't exist as keys in the
-    // YAML; their config lives under the base name. Strip the scope suffix to
-    // recover the template node definition.
-    const baseName = node.scope && nodeName.endsWith(`.${node.scope}`)
-      ? nodeName.slice(0, -(node.scope.length + 1))
-      : nodeName;
-    const nodeDef = this.workflowConfig.nodes[baseName] ?? this.workflowConfig.nodes[nodeName];
-    const backendType = nodeDef?.backend ?? 'claude-code';
-    const kind = nodeDef?.kind ?? node.kind ?? 'reasoning';
-
-    // ---- NEW BACKEND DISPATCH (kind: tool or kind: reasoning + new backend) ----
-
-    if (kind === 'tool') {
-      // Transition spawning -> running so handleSignal accepts the written signal
-      node.terminalId = null;
-      node.startedAt = Date.now();
-      node.invocationCount++;
-      this.transition(nodeName, 'terminal_created');
-      await this.dispatchToolNode(nodeName, node, agentName, nodeDef);
-      return;
-    }
 
     if (kind === 'reasoning' && (backendType === 'claude' || backendType === 'openai-compat' || backendType === 'ollama')) {
       node.terminalId = null;

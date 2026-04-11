@@ -48,6 +48,7 @@ shared_context: |
 nodes:
 
   conjecturer:
+    kind: reasoning
     preset: research/theorem-prover-mini/conjecturer
     backend: claude-code
     model: opus
@@ -58,12 +59,14 @@ nodes:
         foreach: theorem_ids
 
   formalizer:
+    kind: reasoning
     preset: research/theorem-prover-mini/formalizer
     backend: claude-code
     model: opus
     depends_on: [conjecturer]
 
   prover:
+    kind: reasoning
     preset: research/theorem-prover-mini/prover
     backend: claude-code
     model: opus
@@ -72,6 +75,7 @@ nodes:
     max_invocations: 4  # Initial + 3 self-corrections
 
   lean_check:
+    kind: reasoning
     preset: research/theorem-prover-mini/lean-checker
     backend: process
     command: ["lake", "build"]
@@ -85,6 +89,7 @@ nodes:
         goto: prover
 
   reporter:
+    kind: reasoning
     preset: research/theorem-prover-mini/reporter
     backend: claude-code
     model: sonnet

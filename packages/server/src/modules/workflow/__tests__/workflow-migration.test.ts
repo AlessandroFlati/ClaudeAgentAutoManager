@@ -33,4 +33,13 @@ describe('Workflow YAML migration — kind: reasoning on all nodes', () => {
       expect(cfg.nodes[name].kind, `node ${name} should be reasoning`).toBe('reasoning');
     }
   });
+
+  it('theorem-prover-mini: all 5 nodes have kind: reasoning', () => {
+    const cfg = parseWorkflow(readWorkflow('theorem-prover-mini'));
+    const nodeNames = Object.keys(cfg.nodes);
+    expect(nodeNames.length).toBe(5);
+    for (const name of nodeNames) {
+      expect(cfg.nodes[name].kind, `node ${name} should be reasoning`).toBe('reasoning');
+    }
+  });
 });

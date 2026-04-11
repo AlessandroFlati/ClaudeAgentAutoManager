@@ -1,0 +1,15 @@
+name: stats.correlation_matrix
+version: 1
+description: Compute the Pearson correlation matrix for all numeric columns in a DataFrame.
+inputs:
+  df:
+    schema: DataFrame
+    required: true
+    description: Input DataFrame (numeric columns only are used).
+outputs:
+  matrix:
+    schema: NumpyArray
+    description: Correlation matrix as a 2-D numpy array.
+implementation:
+  language: python
+  entry_point: tool.py:run

@@ -182,3 +182,64 @@ export interface RegistryClientOptions {
   rootDir?: string;          // defaults to ~/.plurics/registry; override via PLURICS_REGISTRY_ROOT
   pythonPath?: string;       // absolute path; resolved at initialize() if omitted
 }
+
+// ---------- Value Store (Node Runtimes Phase 2) ----------
+
+/**
+ * An opaque reference to a structured value held in the run-level ValueStore.
+ * This is what flows through the TypeScript workflow runtime instead of raw
+ * pickle envelopes. Callers outside the execution layer never see ValueEnvelope.
+ */
+export interface ValueRef {
+  _type: 'value_ref';
+  /** "vs-{yyyyMMddTHHmmss}-{nodeName}-{portName}-{shortHash}" */
+  _handle: string;
+  /** Schema name, e.g. "DataFrame" or "NumpyArray". */
+  _schema: string;
+  /** Human-readable summary produced by the runner, if available. */
+  _summary?: ValueSummary;
+}
+
+/**
+ * The raw pickle envelope as emitted by the Python runner.
+ * Lives only inside the execution layer and the value store.
+ */
+export interface ValueEnvelope {
+  _schema: string;
+  _encoding: 'pickle_b64';
+  /** base64-encoded pickle bytes. */
+  _data: string;
+}
+
+/**
+ * Compact summary computed by the runner and stored alongside the envelope.
+ * Provides a human-readable / LLM-readable view without unpickling.
+ */
+export interface ValueSummary {
+  schema: string;
+  // DataFrame-specific
+  shape?: [number, number];
+  columns?: string[];
+  head?: Record<string, unknown>[];
+  stats?: Record<string, unknown>;
+  // NumpyArray-specific
+  ndim?: number;
+  size?: number;
+  dtype?: string;
+  sample?: unknown[];
+}
+
+/**
+ * A stored value: envelope + optional summary, with provenance metadata.
+ * Kept in the ValueStore's in-memory map and serialized to disk on flush().
+ */
+export interface StoredValue {
+  handle: string;
+  envelope: ValueEnvelope;
+  summary: ValueSummary | null;
+  schema: string;
+  /** ISO-8601 UTC timestamp of when store() was called. */
+  createdAt: string;
+  nodeName: string;
+  portName: string;
+}

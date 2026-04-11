@@ -23,4 +23,14 @@ describe('Workflow YAML migration — kind: reasoning on all nodes', () => {
       expect(cfg.nodes[name].kind, `node ${name} should be reasoning`).toBe('reasoning');
     }
   });
+
+  it('research-swarm: all 14 nodes have kind: reasoning', () => {
+    const cfg = parseWorkflow(readWorkflow('research-swarm'));
+    const nodeNames = Object.keys(cfg.nodes);
+    expect(nodeNames.length).toBe(14);
+    for (const name of nodeNames) {
+      expect(cfg.nodes[name].kind, `node ${name} missing kind`).toBeDefined();
+      expect(cfg.nodes[name].kind, `node ${name} should be reasoning`).toBe('reasoning');
+    }
+  });
 });

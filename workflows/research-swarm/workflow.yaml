@@ -39,6 +39,7 @@ shared_context: |
 nodes:
 
   ingestor:
+    kind: reasoning
     preset: research/ingestor
     depends_on: []
     timeout_seconds: 600
@@ -46,6 +47,7 @@ nodes:
     effort: low
 
   profiler:
+    kind: reasoning
     preset: research/profiler
     depends_on: [ingestor]
     timeout_seconds: 600
@@ -53,6 +55,7 @@ nodes:
     effort: low
 
   hypothesist:
+    kind: reasoning
     preset: research/hypothesist
     depends_on: [profiler]
     max_invocations: 3
@@ -61,6 +64,7 @@ nodes:
     effort: low
 
   adversary:
+    kind: reasoning
     preset: research/adversary
     depends_on: [hypothesist]
     timeout_seconds: 600
@@ -68,6 +72,7 @@ nodes:
     effort: low
 
   judge:
+    kind: reasoning
     preset: research/judge
     depends_on: [adversary]
     timeout_seconds: 600
@@ -81,6 +86,7 @@ nodes:
         goto: hypothesist
 
   architect:
+    kind: reasoning
     preset: research/architect
     depends_on: [judge]
     timeout_seconds: 600
@@ -88,6 +94,7 @@ nodes:
     effort: low
 
   coder:
+    kind: reasoning
     preset: research/coder
     depends_on: [architect]
     timeout_seconds: 600
@@ -95,6 +102,7 @@ nodes:
     effort: low
 
   auditor:
+    kind: reasoning
     preset: research/auditor
     depends_on: [coder]
     max_invocations: 5
@@ -107,6 +115,7 @@ nodes:
         goto: fixer
 
   fixer:
+    kind: reasoning
     preset: research/fixer
     depends_on: [auditor]
     next: auditor
@@ -115,6 +124,7 @@ nodes:
     effort: low
 
   executor:
+    kind: reasoning
     preset: research/executor
     depends_on: [auditor]
     timeout_seconds: 600
@@ -122,6 +132,7 @@ nodes:
     effort: low
 
   falsifier:
+    kind: reasoning
     preset: research/falsifier
     depends_on: [executor]
     timeout_seconds: 600
@@ -134,6 +145,7 @@ nodes:
         goto: hypothesist
 
   generalizer:
+    kind: reasoning
     preset: research/generalizer
     depends_on: [falsifier]
     timeout_seconds: 600
@@ -141,6 +153,7 @@ nodes:
     effort: low
 
   reporter:
+    kind: reasoning
     preset: research/reporter
     depends_on: [generalizer]
     timeout_seconds: 300
@@ -148,6 +161,7 @@ nodes:
     effort: low
 
   meta_analyst:
+    kind: reasoning
     preset: research/meta-analyst
     depends_on_all: [reporter]
     timeout_seconds: 600

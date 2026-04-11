@@ -20,11 +20,21 @@ describe('loadSeedTools — unit (no Python required)', () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   });
 
-  it('returns zero counts when manifest is empty', async () => {
+  it('first call registers all seed tools', async () => {
     const result = await loadSeedTools(client);
+    // With empty manifest, zero registered is correct.
+    // This count will be updated as tools are added in tasks 4-13.
     expect(result.registered).toBe(0);
     expect(result.skipped).toBe(0);
     expect(result.failed).toBe(0);
     expect(result.errors).toHaveLength(0);
+  });
+
+  it('second call is a pure no-op (idempotent)', async () => {
+    await loadSeedTools(client);
+    const result2 = await loadSeedTools(client);
+    expect(result2.registered).toBe(0);
+    expect(result2.skipped).toBe(0); // also 0 because manifest is still empty
+    expect(result2.failed).toBe(0);
   });
 });

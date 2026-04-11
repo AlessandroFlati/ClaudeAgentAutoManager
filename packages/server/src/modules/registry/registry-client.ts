@@ -1,5 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import type {
   RegistryClientOptions,
   RegistrationError,
@@ -26,7 +29,13 @@ export class RegistryClient {
   private readonly db: RegistryDb;
   private readonly schemas: SchemaRegistry;
   private readonly pythonPath: string | null;
+  private resolvedPythonPath: string | null = null;
   private initialized = false;
+
+  /** Resolved Python interpreter; null if probing failed. */
+  get python(): string | null {
+    return this.resolvedPythonPath;
+  }
 
   constructor(options: RegistryClientOptions = {}) {
     this.layout = new RegistryLayout(options.rootDir);
@@ -51,6 +60,41 @@ export class RegistryClient {
         await this.rebuildFromFilesystem();
       }
     }
+    this.deployRunner();
+    this.resolvedPythonPath = this.pythonPath ?? this.probePython();
+  }
+
+  private deployRunner(): void {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const source = path.resolve(here, 'python', 'runner.py');
+    const dest = this.layout.runnerPath;
+    const sourceBytes = fs.readFileSync(source);
+    const sourceHash = createHash('sha256').update(sourceBytes).digest('hex');
+    let destHash: string | null = null;
+    if (fs.existsSync(dest)) {
+      destHash = createHash('sha256').update(fs.readFileSync(dest)).digest('hex');
+    }
+    if (destHash !== sourceHash) {
+      fs.writeFileSync(dest, sourceBytes);
+    }
+  }
+
+  private probePython(): string | null {
+    const candidates = process.platform === 'win32'
+      ? ['python', 'py']
+      : ['python3', 'python'];
+    for (const cmd of candidates) {
+      try {
+        const args = cmd === 'py' ? ['-3', '--version'] : ['--version'];
+        const r = spawnSync(cmd, args, { encoding: 'utf8' });
+        if (r.status === 0) {
+          return cmd === 'py' ? 'py' : cmd;
+        }
+      } catch {
+        // continue
+      }
+    }
+    return null;
   }
 
   close(): void {

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { RegistryClient } from '../registry-client.js';
 import { BUILTIN_SCHEMAS } from '../schemas/builtin.js';
 
@@ -370,5 +371,55 @@ implementation:
     await rc.rebuildFromFilesystem();
     expect(rc.list()).toEqual([]);
     rc.close();
+  });
+});
+
+describe('RegistryClient — runner deployment', () => {
+  let tmpRoot: string;
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'plurics-rc-runner-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it('copies runner.py to the registry root on initialize', async () => {
+    const rc = new RegistryClient({ rootDir: tmpRoot });
+    await rc.initialize();
+    const dest = path.join(tmpRoot, 'runner.py');
+    expect(fs.existsSync(dest)).toBe(true);
+    const body = fs.readFileSync(dest, 'utf8');
+    expect(body).toMatch(/Plurics tool runner/);
+    rc.close();
+  });
+
+  it('does not rewrite runner.py when the source is unchanged', async () => {
+    const rc1 = new RegistryClient({ rootDir: tmpRoot });
+    await rc1.initialize();
+    const dest = path.join(tmpRoot, 'runner.py');
+    const mtimeBefore = fs.statSync(dest).mtimeMs;
+    rc1.close();
+    // Small sleep so mtime has a chance to differ if we do rewrite.
+    await new Promise((r) => setTimeout(r, 30));
+    const rc2 = new RegistryClient({ rootDir: tmpRoot });
+    await rc2.initialize();
+    const mtimeAfter = fs.statSync(dest).mtimeMs;
+    expect(mtimeAfter).toBe(mtimeBefore);
+    rc2.close();
+  });
+
+  it('rewrites runner.py when its content changed', async () => {
+    const rc1 = new RegistryClient({ rootDir: tmpRoot });
+    await rc1.initialize();
+    rc1.close();
+    // Simulate a stale local copy.
+    fs.writeFileSync(path.join(tmpRoot, 'runner.py'), '# stale\n');
+    const rc2 = new RegistryClient({ rootDir: tmpRoot });
+    await rc2.initialize();
+    const body = fs.readFileSync(path.join(tmpRoot, 'runner.py'), 'utf8');
+    expect(body).toMatch(/Plurics tool runner/);
+    rc2.close();
   });
 });

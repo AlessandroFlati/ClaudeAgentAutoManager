@@ -18,7 +18,7 @@ import { resolvePresetContent, resolvePlaceholders } from './preset-resolver.js'
 import type { WorkflowPlugin } from './sdk.js';
 import { EvolutionaryPool } from './evolutionary-pool.js';
 import type { AgentRegistry } from '../agents/agent-registry.js';
-import type { AgentBackend, AgentConfig } from '../agents/agent-backend.js';
+import type { LegacyAgentBackend, AgentConfig } from '../agents/agent-backend.js';
 import type { AgentBootstrap } from '../knowledge/agent-bootstrap.js';
 import type { PresetRepository } from '../../db/preset-repository.js';
 

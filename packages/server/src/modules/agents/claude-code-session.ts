@@ -13,7 +13,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import * as pty from 'node-pty';
 import * as os from 'node:os';
-import type { AgentBackend, AgentConfig, AgentInfo, AgentResult, BackendType } from './agent-backend.js';
+import type { LegacyAgentBackend, AgentConfig, AgentInfo, AgentResult, BackendType } from './agent-backend.js';
 
 const DEFAULT_COMMAND = 'claude --dangerously-skip-permissions';
 const DEFAULT_CWD = process.cwd();
@@ -123,11 +123,11 @@ class TerminalSession {
 }
 
 /**
- * Public AgentBackend implementation for claude-code.
+ * Public LegacyAgentBackend implementation for claude-code.
  * The PTY is internal; the interface exposes the minimal surface that the
  * DagExecutor and AgentRegistry need.
  */
-export class ClaudeCodeSession implements AgentBackend {
+export class ClaudeCodeSession implements LegacyAgentBackend {
   readonly backendType: BackendType = 'claude-code';
   private readonly session: TerminalSession;
 

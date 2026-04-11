@@ -2,13 +2,21 @@
  * AgentBackend — unified interface for all agent execution backends.
  *
  * Three implementations:
- * - ClaudeCodeBackend: wraps TerminalSession (node-pty → claude CLI)
- * - ProcessBackend: child_process for deterministic scripts (Lean, Python)
- * - LocalLlmBackend: HTTP to OpenAI-compatible API (vLLM, llama.cpp)
+ * - ClaudeCodeSession: wraps node-pty (claude CLI in a PTY terminal)
+ * - ProcessSession: child_process for deterministic scripts (Lean, Python)
+ * - LocalLlmSession: HTTP to OpenAI-compatible or Ollama native API
+ *
+ * @deprecated This interface and all three implementations are the LEGACY
+ * backend system from the CAAM origin. They are kept alive in NR Phase 1
+ * under the Option A compat mode. Removal is tracked as NR Phase 3 Step 0,
+ * after the new AgentBackend implementations pass smoke tests on all five
+ * workflows. New code should use the new AgentBackend interface (Task 3).
  */
 
+/** @deprecated */
 export type BackendType = 'claude-code' | 'process' | 'local-llm';
 
+/** @deprecated */
 export interface AgentConfig {
   name: string;
   cwd: string;
@@ -16,40 +24,43 @@ export interface AgentConfig {
   backend: BackendType;
 
   // claude-code specific
-  command?: string;          // e.g. 'claude --dangerously-skip-permissions --model claude-opus-4-6'
+  command?: string;
   effort?: 'low' | 'medium' | 'high';
 
   // process specific
-  processCommand?: string[]; // e.g. ['python', '-m', 'ohlc_fetcher']
-  workingDir?: string;       // override cwd for the process
+  processCommand?: string[];
+  workingDir?: string;
   env?: Record<string, string>;
 
   // local-llm specific
-  endpoint?: string;         // e.g. 'http://localhost:8000/v1' or 'http://localhost:11434' for Ollama native
-  model?: string;            // e.g. 'Goedel-LM/Goedel-Prover-V2-8B' or 'qwen3.5:35b'
+  endpoint?: string;
+  model?: string;
   maxTokens?: number;
   temperature?: number;
-  systemPrompt?: string;     // injected as system message
-  /** Provider API format: 'openai' (default) or 'ollama' for Ollama's native /api/chat. */
+  systemPrompt?: string;
+  /** Provider API format: 'openai' (default) or 'ollama'. */
   provider?: 'openai' | 'ollama';
   /** Disable thinking mode for reasoning models (Qwen 3.5, DeepSeek-R1). Ollama-only. */
   disableThinking?: boolean;
 }
 
+/** @deprecated */
 export interface AgentResult {
   success: boolean;
-  output: string;            // stdout or LLM completion
-  error: string | null;      // stderr or error message
-  exitCode: number | null;   // for process backend
+  output: string;
+  error: string | null;
+  exitCode: number | null;
   durationMs: number;
   artifacts: AgentArtifact[];
 }
 
+/** @deprecated */
 export interface AgentArtifact {
   path: string;
   type: 'json' | 'lean' | 'python' | 'markdown' | 'binary';
 }
 
+/** @deprecated */
 export interface AgentInfo {
   id: string;
   name: string;
@@ -58,7 +69,13 @@ export interface AgentInfo {
   createdAt: number;
 }
 
-export interface AgentBackend {
+/**
+ * Legacy PTY/process/HTTP backend interface inherited from CAAM.
+ *
+ * @deprecated Replaced by the new conversation-oriented AgentBackend interface
+ * in NR Phase 1. This interface will be removed in NR Phase 3 Step 0.
+ */
+export interface LegacyAgentBackend {
   readonly id: string;
   readonly name: string;
   readonly backendType: BackendType;

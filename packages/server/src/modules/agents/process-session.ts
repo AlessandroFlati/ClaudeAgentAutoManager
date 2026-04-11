@@ -10,12 +10,12 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { AgentBackend, AgentConfig, AgentInfo, AgentResult, BackendType } from './agent-backend.js';
+import type { LegacyAgentBackend, AgentConfig, AgentInfo, AgentResult, BackendType } from './agent-backend.js';
 
 type DataCallback = (data: string) => void;
 type ExitCallback = () => void;
 
-export class ProcessSession implements AgentBackend {
+export class ProcessSession implements LegacyAgentBackend {
   readonly id: string;
   readonly name: string;
   readonly backendType: BackendType = 'process';

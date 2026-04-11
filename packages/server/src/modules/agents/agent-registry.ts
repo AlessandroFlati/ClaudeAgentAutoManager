@@ -2,7 +2,7 @@
  * AgentRegistry — manages all agent backends (claude-code, process, local-llm).
  */
 
-import type { AgentBackend, AgentConfig, AgentInfo } from './agent-backend.js';
+import type { LegacyAgentBackend, AgentConfig, AgentInfo } from './agent-backend.js';
 import { ClaudeCodeSession } from './claude-code-session.js';
 import { ProcessSession } from './process-session.js';
 import { LocalLlmSession } from './local-llm-session.js';
@@ -11,7 +11,7 @@ type SpawnCallback = (name: string, purpose: string) => void;
 type ExitCallback = (name: string) => void;
 
 export class AgentRegistry {
-  private readonly sessions = new Map<string, AgentBackend>();
+  private readonly sessions = new Map<string, LegacyAgentBackend>();
   private readonly purposes = new Map<string, string>();
   private readonly spawnCallbacks = new Set<SpawnCallback>();
   private readonly exitCallbacks = new Set<ExitCallback>();
@@ -44,7 +44,7 @@ export class AgentRegistry {
     return backend.info;
   }
 
-  private async createBackend(config: AgentConfig): Promise<AgentBackend> {
+  private async createBackend(config: AgentConfig): Promise<LegacyAgentBackend> {
     switch (config.backend) {
       case 'claude-code':
         return ClaudeCodeSession.create(config);
@@ -64,11 +64,11 @@ export class AgentRegistry {
     }
   }
 
-  get(id: string): AgentBackend | undefined {
+  get(id: string): LegacyAgentBackend | undefined {
     return this.sessions.get(id);
   }
 
-  getByName(name: string): AgentBackend | undefined {
+  getByName(name: string): LegacyAgentBackend | undefined {
     for (const session of this.sessions.values()) {
       if (session.name === name) return session;
     }

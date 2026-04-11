@@ -7,12 +7,12 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { AgentBackend, AgentConfig, AgentInfo, AgentResult, BackendType } from './agent-backend.js';
+import type { LegacyAgentBackend, AgentConfig, AgentInfo, AgentResult, BackendType } from './agent-backend.js';
 
 type DataCallback = (data: string) => void;
 type ExitCallback = () => void;
 
-export class LocalLlmSession implements AgentBackend {
+export class LocalLlmSession implements LegacyAgentBackend {
   readonly id: string;
   readonly name: string;
   readonly backendType: BackendType = 'local-llm';

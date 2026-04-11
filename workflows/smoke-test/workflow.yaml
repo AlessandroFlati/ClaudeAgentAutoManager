@@ -20,6 +20,7 @@ nodes:
   # Process backend — deterministic echo script
   echo_node:
     preset: smoke/echo
+    kind: reasoning
     backend: process
     command: ["powershell", "-NoProfile", "-Command", "Write-Output 'hello from process backend'; exit 0"]
     depends_on: []
@@ -28,6 +29,7 @@ nodes:
   # Claude-code backend — normal agent (sonnet for speed)
   writer:
     preset: smoke/writer
+    kind: reasoning
     backend: claude-code
     model: sonnet
     depends_on: [echo_node]
@@ -35,6 +37,7 @@ nodes:
   # Local-llm backend — Qwen3.5 via Ollama (native API with thinking disabled)
   reviewer:
     preset: smoke/reviewer
+    kind: reasoning
     backend: local-llm
     endpoint: http://localhost:11434
     provider: ollama

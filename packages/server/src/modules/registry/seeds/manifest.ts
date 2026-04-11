@@ -10,4 +10,5 @@ export interface SeedToolDef {
 export const SEED_TOOLS: SeedToolDef[] = [
   { name: 'stats.mean', relPath: './tools/stats.mean/tool.yaml' },
   { name: 'stats.fft',  relPath: './tools/stats.fft/tool.yaml' },
+  { name: 'json.load', relPath: './tools/json.load/tool.yaml' },
 ];

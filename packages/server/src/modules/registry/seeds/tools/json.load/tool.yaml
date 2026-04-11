@@ -1,0 +1,15 @@
+name: json.load
+version: 1
+description: Load a JSON file from disk and return its contents as a JsonObject.
+inputs:
+  path:
+    schema: String
+    required: true
+    description: Absolute or relative path to the JSON file to read.
+outputs:
+  data:
+    schema: JsonObject
+    description: Parsed JSON contents of the file.
+implementation:
+  language: python
+  entry_point: tool.py:run

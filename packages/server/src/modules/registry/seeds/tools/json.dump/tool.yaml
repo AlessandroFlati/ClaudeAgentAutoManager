@@ -1,0 +1,19 @@
+name: json.dump
+version: 1
+description: Serialize a JsonObject to a JSON file on disk.
+inputs:
+  data:
+    schema: JsonObject
+    required: true
+    description: The object to serialize and write.
+  path:
+    schema: String
+    required: true
+    description: Destination file path (will be created or overwritten).
+outputs:
+  written:
+    schema: Boolean
+    description: True if the file was written successfully.
+implementation:
+  language: python
+  entry_point: tool.py:run

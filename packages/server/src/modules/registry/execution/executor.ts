@@ -15,6 +15,9 @@ export interface ExecutorDeps {
    * Phase 2 note: pass the run-level ValueStore from the DAG executor to
    * enable handle generation and resolution.
    */
+  // Phase 2: tool nodes pass the run-level ValueStore from DagExecutor.
+  // Phase 3: reasoning nodes will pass a scope-local store aliased to the
+  // run-level store (no behavioral change until NR Phase 3's tool-calling loop).
   valueStore?: ValueStore | null;
 }
 

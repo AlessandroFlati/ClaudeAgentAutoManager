@@ -50,6 +50,11 @@ export class ValueStore {
     nodeName: string,
     portName: string,
   ): string {
+    // Phase 2 stub: scope-local and run-level are the same Map. Phase 3 will
+    // introduce a distinct scope-local tier that the tool-calling loop writes to,
+    // distinct from the run-level tier that persists across scope boundaries within
+    // a run. The API surface (store() as the single write path) is designed to
+    // accept a 'scope' parameter in Phase 3 without changing callers.
     const ts = new Date().toISOString().replace(/[-:]/g, '').replace('T', 'T').slice(0, 15);
     const sanNode = sanitize(nodeName);
     const sanPort = sanitize(portName);

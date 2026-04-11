@@ -12,6 +12,7 @@ import { AgentBootstrap } from './modules/knowledge/agent-bootstrap.js';
 import { KnowledgeWatcher } from './modules/knowledge/knowledge-watcher.js';
 import { seedPresetsFromFilesystem } from './modules/workflow/preset-resolver.js';
 import { resolvePluricsPath } from './modules/workflow/utils.js';
+import { RegistryClient } from './modules/registry/index.js';
 
 const PORT = parseInt(process.env.PORT ?? '11001', 10);
 
@@ -22,6 +23,7 @@ const server = http.createServer(app);
 const registry = new AgentRegistry();
 const bootstrap = new AgentBootstrap();
 const watcher = new KnowledgeWatcher(registry);
+export const toolRegistry = new RegistryClient();
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -298,6 +300,30 @@ if (seeded > 0) {
   console.log(`Seeded ${seeded} preset(s) from workflows/presets/`);
 }
 
-server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+(async () => {
+  try {
+    await toolRegistry.initialize();
+    console.log('[registry] initialized');
+  } catch (err) {
+    console.error('[registry] initialize failed:', err);
+    process.exit(1);
+  }
+
+  server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+})();
+
+const shutdown = (signal: string): void => {
+  console.log(`[server] received ${signal}, shutting down`);
+  try {
+    toolRegistry.close();
+  } catch {
+    // ignore
+  }
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 5_000).unref();
+};
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

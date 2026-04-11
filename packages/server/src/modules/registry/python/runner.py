@@ -11,16 +11,21 @@ Protocol:
              {
                "inputs":         { port_name: value, ... },
                "input_schemas":  { port_name: schema_name, ... },
-               "output_schemas": { port_name: schema_name, ... }
+               "output_schemas": { port_name: schema_name, ... },
+               "value_refs":     { handle: { "_schema":..., "_encoding":"pickle_b64", "_data":... }, ... }
              }
+             Inputs whose value is { "_type": "value_ref", "_handle": "..." } are resolved
+             by looking up the handle in value_refs before calling the tool function.
+
   stdout - JSON envelope:
-             on success (exit 0): { "ok": true, "outputs": { ... } }
+             on success (exit 0):    { "ok": true, "outputs": { ... } }
              on tool error (exit 1): { "ok": false, "error": {...} }
              on runner error (exit 2): empty stdout, stderr carries details
 
 Structured schemas listed in PICKLE_SCHEMAS are transported as
   { "_schema": name, "_encoding": "pickle_b64", "_data": base64 }
-on both sides. All other values pass through the JSON encoder directly.
+on both sides. For output ports with structured schemas, the runner also
+emits a compact summary as "_summary" (computed by _make_summary).
 
 This file is shipped with the Plurics server and copied to
 ~/.plurics/registry/runner.py at first initialization. Do not edit the
@@ -39,7 +44,50 @@ from pathlib import Path
 PICKLE_SCHEMAS = {"NumpyArray", "DataFrame"}
 
 
-def decode_value(raw, schema_name):
+def _make_summary(schema_name, value):
+    """Compute a compact human-readable summary of a structured value.
+
+    Returns a dict or None. Never raises — any failure returns None so that
+    a summary failure does not fail the tool invocation.
+    """
+    try:
+        if schema_name == "NumpyArray":
+            return {
+                "shape": list(value.shape),
+                "ndim": int(value.ndim),
+                "size": int(value.size),
+                "dtype": str(value.dtype),
+                "sample": value.flat[:5].tolist(),
+            }
+        if schema_name == "DataFrame":
+            return {
+                "shape": list(value.shape),
+                "columns": list(value.columns),
+                "head": value.head(5).to_dict("records"),
+                "stats": value.describe().to_dict(),
+            }
+    except Exception:
+        return None
+    return None
+
+
+def decode_value(raw, schema_name, value_refs):
+    """Decode a single input value.
+
+    If raw is a value_ref, look up the handle in value_refs and decode from
+    the resolved envelope. Otherwise fall through to the standard path.
+    """
+    if isinstance(raw, dict) and raw.get("_type") == "value_ref":
+        handle = raw.get("_handle", "")
+        envelope = value_refs.get(handle)
+        if envelope is None:
+            raise ValueError("handle_not_found: %s" % handle)
+        if not isinstance(envelope, dict) or envelope.get("_encoding") != "pickle_b64":
+            raise ValueError(
+                "value_ref envelope for handle %s is not a valid pickle_b64 envelope" % handle
+            )
+        return pickle.loads(base64.b64decode(envelope["_data"]))
+
     if schema_name in PICKLE_SCHEMAS:
         if not isinstance(raw, dict) or raw.get("_encoding") != "pickle_b64":
             raise ValueError(
@@ -52,11 +100,15 @@ def decode_value(raw, schema_name):
 
 def encode_value(value, schema_name):
     if schema_name in PICKLE_SCHEMAS:
-        return {
+        encoded = {
             "_schema": schema_name,
             "_encoding": "pickle_b64",
             "_data": base64.b64encode(pickle.dumps(value)).decode("ascii"),
         }
+        summary = _make_summary(schema_name, value)
+        if summary is not None:
+            encoded["_summary"] = summary
+        return encoded
     return value
 
 
@@ -101,6 +153,8 @@ def main():
     raw_inputs = envelope.get("inputs") or {}
     input_schemas = envelope.get("input_schemas") or {}
     output_schemas = envelope.get("output_schemas") or {}
+    # Phase 2: map of handle -> pickle_b64 envelope for resolving value_refs in inputs
+    value_refs = envelope.get("value_refs") or {}
 
     try:
         fn = load_entry_point(tool_dir, entry_point)
@@ -110,7 +164,7 @@ def main():
 
     try:
         decoded = {
-            name: decode_value(raw_inputs[name], input_schemas.get(name, "JsonObject"))
+            name: decode_value(raw_inputs[name], input_schemas.get(name, "JsonObject"), value_refs)
             for name in raw_inputs
         }
     except Exception as e:

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseWorkflow } from '../yaml-parser.js';
 
-const REPO_ROOT = join(import.meta.dirname ?? __dirname, '../../../../../../');
+const REPO_ROOT = join(__dirname, '../../../../../../');
 
 function readWorkflow(name: string): string {
   return readFileSync(join(REPO_ROOT, 'workflows', name, 'workflow.yaml'), 'utf-8');

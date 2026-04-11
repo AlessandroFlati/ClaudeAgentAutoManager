@@ -1,0 +1,18 @@
+name: stats.fft
+version: 1
+description: Compute the FFT of a real-valued signal and return frequency bins and magnitudes.
+inputs:
+  values:
+    schema: JsonArray
+    required: true
+    description: Real-valued signal samples (list of numbers).
+outputs:
+  frequencies:
+    schema: NumpyArray
+    description: Frequency bin centres (Hz, assuming unit sample rate).
+  magnitudes:
+    schema: NumpyArray
+    description: Magnitude spectrum (absolute value of complex FFT output).
+implementation:
+  language: python
+  entry_point: tool.py:run

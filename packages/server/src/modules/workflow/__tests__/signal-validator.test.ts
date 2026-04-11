@@ -43,7 +43,7 @@ describe('validateSignalSchema', () => {
 
   it('rejects missing agent', () => {
     const s = makeSignal();
-    (s as Record<string, unknown>).agent = 123;
+    (s as unknown as Record<string, unknown>).agent = 123;
     expect(validateSignalSchema(s)).toBe(false);
   });
 
@@ -64,7 +64,7 @@ describe('validateSignalOutputs', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'caam-test-'));
-    fs.mkdirSync(path.join(tmpDir, '.caam', 'shared', 'results'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.plurics', 'shared', 'results'), { recursive: true });
   });
 
   afterEach(() => {
@@ -87,7 +87,7 @@ describe('validateSignalOutputs', () => {
   });
 
   it('detects size mismatch', async () => {
-    const filePath = path.join(tmpDir, '.caam', 'shared', 'results', 'out.json');
+    const filePath = path.join(tmpDir, '.plurics', 'shared', 'results', 'out.json');
     fs.writeFileSync(filePath, '{"ok":true}');
     const stat = fs.statSync(filePath);
     const signal = makeSignal({
@@ -99,7 +99,7 @@ describe('validateSignalOutputs', () => {
   });
 
   it('detects sha256 mismatch', async () => {
-    const filePath = path.join(tmpDir, '.caam', 'shared', 'results', 'out.json');
+    const filePath = path.join(tmpDir, '.plurics', 'shared', 'results', 'out.json');
     fs.writeFileSync(filePath, '{"ok":true}');
     const stat = fs.statSync(filePath);
     const signal = makeSignal({
@@ -111,7 +111,7 @@ describe('validateSignalOutputs', () => {
   });
 
   it('validates correct output', async () => {
-    const filePath = path.join(tmpDir, '.caam', 'shared', 'results', 'out.json');
+    const filePath = path.join(tmpDir, '.plurics', 'shared', 'results', 'out.json');
     const content = '{"ok":true}';
     fs.writeFileSync(filePath, content);
     const stat = fs.statSync(filePath);

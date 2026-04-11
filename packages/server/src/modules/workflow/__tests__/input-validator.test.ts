@@ -61,7 +61,7 @@ describe('validateInputManifest', () => {
   it('fails for non-SELECT SQL query', () => {
     fs.writeFileSync(path.join(tmpDir, 'test.db'), '');
     const errors = validateInputManifest(makeManifest({
-      sources: [{ type: 'sqlite', path: 'test.db', query: 'DROP TABLE users' }],
+      sources: [{ type: 'sqlite', path: 'test.db', query: 'DROP TABLE users', discovery: null }],
     }), tmpDir);
     expect(errors.some(e => e.message.includes('SELECT'))).toBe(true);
   });

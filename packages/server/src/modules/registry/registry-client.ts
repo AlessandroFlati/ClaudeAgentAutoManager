@@ -23,6 +23,7 @@ import { BUILTIN_SCHEMAS } from './schemas/builtin.js';
 import { parseToolManifest, ManifestParseError } from './manifest/parser.js';
 import { validateToolManifest } from './manifest/validator.js';
 import { invokeTool } from './execution/executor.js';
+import { ValueStore } from './execution/value-store.js';
 
 export class RegistryClient {
   private readonly layout: RegistryLayout;
@@ -376,7 +377,7 @@ export class RegistryClient {
     return { ...record, directory: this.layout.toolVersionDir(record.name, record.version) };
   }
 
-  async invoke(request: InvocationRequest): Promise<InvocationResult> {
+  async invoke(request: InvocationRequest, valueStore?: ValueStore | null): Promise<InvocationResult> {
     const tool = this.get(request.toolName, request.version);
     if (!tool) {
       return {
@@ -393,6 +394,7 @@ export class RegistryClient {
         schemas: this.schemas,
         runnerPath: this.layout.runnerPath,
         pythonPath: this.resolvedPythonPath,
+        valueStore: valueStore ?? null,
       },
       tool,
       request,

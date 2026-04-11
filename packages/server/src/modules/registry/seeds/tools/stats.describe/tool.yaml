@@ -1,0 +1,15 @@
+name: stats.describe
+version: 1
+description: Compute descriptive statistics for each numeric column in a DataFrame.
+inputs:
+  df:
+    schema: DataFrame
+    required: true
+    description: Input DataFrame to summarise.
+outputs:
+  summary:
+    schema: JsonObject
+    description: Descriptive statistics as a nested dict (column -> stat -> value).
+implementation:
+  language: python
+  entry_point: tool.py:run

@@ -1,5 +1,6 @@
 import type { InvocationRequest, InvocationResult, ToolRecord } from '../types.js';
 import type { SchemaRegistry } from '../schemas/schema-registry.js';
+import type { ValueStore } from './value-store.js';
 import { runSubprocess } from './subprocess.js';
 import { buildEnvelope, encodeInputs, decodeOutputs, EncodingError } from './encoding.js';
 
@@ -7,6 +8,14 @@ export interface ExecutorDeps {
   schemas: SchemaRegistry;
   runnerPath: string;
   pythonPath: string | null;
+  /**
+   * Optional value store for the current workflow run.
+   * If null (the default), pickle inputs are rejected and pickle outputs
+   * are returned as raw envelopes — preserving Phase 1+2 behavior.
+   * Phase 2 note: pass the run-level ValueStore from the DAG executor to
+   * enable handle generation and resolution.
+   */
+  valueStore?: ValueStore | null;
 }
 
 export async function invokeTool(
@@ -47,11 +56,12 @@ export async function invokeTool(
 
   const inputSchemas = Object.fromEntries(tool.inputs.map((p) => [p.name, p.schemaName]));
   const outputSchemas = Object.fromEntries(tool.outputs.map((p) => [p.name, p.schemaName]));
+  const valueStore = deps.valueStore ?? null;
 
   let envelope: string;
   try {
-    const encoded = encodeInputs(mergedInputs, inputSchemas, deps.schemas);
-    envelope = buildEnvelope(encoded, inputSchemas, outputSchemas);
+    const encodeResult = encodeInputs(mergedInputs, inputSchemas, deps.schemas, valueStore);
+    envelope = buildEnvelope(encodeResult.encoded, inputSchemas, outputSchemas, encodeResult.valueRefs);
   } catch (err) {
     if (err instanceof EncodingError) {
       return {
@@ -161,7 +171,8 @@ export async function invokeTool(
     };
   }
 
-  const outputs = decodeOutputs(rawOutputs, outputSchemas, deps.schemas);
+  const nodeName = request.callerContext?.nodeName ?? tool.name;
+  const outputs = decodeOutputs(rawOutputs, outputSchemas, deps.schemas, valueStore, nodeName, tool.name);
   return { success: true, outputs, metrics: { durationMs: durationMs() } };
 }
 

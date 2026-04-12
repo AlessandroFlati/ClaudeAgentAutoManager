@@ -1,0 +1,30 @@
+name: statsmodels.seasonal_adjust
+version: 1
+description: Remove the seasonal component from a time series using statsmodels seasonal decomposition.
+category: time_series
+tags: [seasonal-adjustment, deseasonalise, statsmodels, numpy]
+
+inputs:
+  values:
+    schema: NumpyArray
+    required: true
+    description: 1-D time series values.
+  period:
+    schema: Integer
+    required: true
+    description: Period of the seasonal component.
+
+outputs:
+  adjusted:
+    schema: NumpyArray
+    description: Seasonally adjusted time series.
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [numpy, statsmodels]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: medium

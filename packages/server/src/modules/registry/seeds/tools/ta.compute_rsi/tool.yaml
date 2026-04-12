@@ -1,0 +1,30 @@
+name: ta.compute_rsi
+version: 1
+description: Compute the Relative Strength Index (RSI) for a price series using a rolling window.
+category: time_series
+tags: [rsi, technical-analysis, ta, numpy]
+
+inputs:
+  close:
+    schema: NumpyArray
+    required: true
+    description: 1-D array of closing prices.
+  period:
+    schema: Integer
+    required: true
+    description: RSI look-back period (commonly 14).
+
+outputs:
+  rsi:
+    schema: NumpyArray
+    description: RSI values aligned to the input series (NaN for the first period-1 entries).
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [numpy, ta]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: fast

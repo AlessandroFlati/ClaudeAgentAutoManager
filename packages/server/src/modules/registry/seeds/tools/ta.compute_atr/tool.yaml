@@ -1,0 +1,38 @@
+name: ta.compute_atr
+version: 1
+description: Compute the Average True Range (ATR) indicator from high, low, and close price series.
+category: time_series
+tags: [atr, technical-analysis, ta, numpy]
+
+inputs:
+  high:
+    schema: NumpyArray
+    required: true
+    description: 1-D array of high prices.
+  low:
+    schema: NumpyArray
+    required: true
+    description: 1-D array of low prices.
+  close:
+    schema: NumpyArray
+    required: true
+    description: 1-D array of closing prices.
+  period:
+    schema: Integer
+    required: true
+    description: ATR look-back period (commonly 14).
+
+outputs:
+  atr:
+    schema: NumpyArray
+    description: ATR values aligned to the input series (NaN for early entries).
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [numpy, ta]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: fast

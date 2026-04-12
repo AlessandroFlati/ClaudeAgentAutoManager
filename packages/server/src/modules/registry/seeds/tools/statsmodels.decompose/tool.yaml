@@ -1,0 +1,40 @@
+name: statsmodels.decompose
+version: 1
+description: Decompose a time series into trend, seasonal, and residual components using statsmodels.
+category: time_series
+tags: [decomposition, seasonal, trend, statsmodels, numpy]
+
+inputs:
+  values:
+    schema: NumpyArray
+    required: true
+    description: 1-D time series values.
+  period:
+    schema: Integer
+    required: true
+    description: Period of the seasonal component.
+  model:
+    schema: String
+    required: true
+    description: Decomposition model type — 'additive' or 'multiplicative'.
+
+outputs:
+  trend:
+    schema: NumpyArray
+    description: Trend component of the decomposition.
+  seasonal:
+    schema: NumpyArray
+    description: Seasonal component of the decomposition.
+  residual:
+    schema: NumpyArray
+    description: Residual component of the decomposition.
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [numpy, statsmodels]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: medium

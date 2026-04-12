@@ -1,0 +1,47 @@
+name: statsmodels.arima
+version: 1
+description: Fit an ARIMA model to a time series and return AIC, BIC, fitted parameters, and residuals.
+category: time_series
+tags: [arima, time-series, statsmodels, numpy]
+
+inputs:
+  values:
+    schema: NumpyArray
+    required: true
+    description: 1-D time series values.
+  order_p:
+    schema: Integer
+    required: true
+    description: AR order (p).
+  order_d:
+    schema: Integer
+    required: true
+    description: Integration order (d).
+  order_q:
+    schema: Integer
+    required: true
+    description: MA order (q).
+
+outputs:
+  aic:
+    schema: Float
+    description: Akaike Information Criterion of the fitted model.
+  bic:
+    schema: Float
+    description: Bayesian Information Criterion of the fitted model.
+  params:
+    schema: NumpyArray
+    description: Fitted model parameters.
+  residuals:
+    schema: NumpyArray
+    description: Model residuals.
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [numpy, statsmodels]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: medium

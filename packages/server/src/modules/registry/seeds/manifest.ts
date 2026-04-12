@@ -49,4 +49,11 @@ export const SEED_TOOLS: SeedToolDef[] = [
   { name: 'sklearn.dbscan',            relPath: './tools/sklearn.dbscan/tool.yaml' },
   { name: 'sklearn.hierarchical',      relPath: './tools/sklearn.hierarchical/tool.yaml' },
   { name: 'sklearn.gaussian_mixture',  relPath: './tools/sklearn.gaussian_mixture/tool.yaml' },
+  { name: 'statsmodels.arima',         relPath: './tools/statsmodels.arima/tool.yaml' },
+  { name: 'statsmodels.garch',         relPath: './tools/statsmodels.garch/tool.yaml' },
+  { name: 'statsmodels.decompose',     relPath: './tools/statsmodels.decompose/tool.yaml' },
+  { name: 'statsmodels.seasonal_adjust', relPath: './tools/statsmodels.seasonal_adjust/tool.yaml' },
+  { name: 'statsmodels.granger_causality', relPath: './tools/statsmodels.granger_causality/tool.yaml' },
+  { name: 'ta.compute_rsi',            relPath: './tools/ta.compute_rsi/tool.yaml' },
+  { name: 'ta.compute_atr',            relPath: './tools/ta.compute_atr/tool.yaml' },
 ];

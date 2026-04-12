@@ -111,6 +111,10 @@ export class RegistryClient {
     return this.schemas.get(name);
   }
 
+  getSchemaRegistry(): SchemaRegistry {
+    return this.schemas;
+  }
+
   async register(request: RegistrationRequest): Promise<RegistrationResult> {
     const start = Date.now();
     const caller = request.caller;

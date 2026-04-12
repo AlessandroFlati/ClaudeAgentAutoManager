@@ -28,6 +28,8 @@ import { OpenAICompatBackend } from '../agents/openai-compat-backend.js';
 import { OllamaBackend } from '../agents/ollama-backend.js';
 import { runReasoningNode } from '../agents/reasoning-runtime.js';
 import { resolveToolset } from '../agents/toolset-resolver.js';
+import { checkWorkflow } from './type-checker.js';
+import type { ResolvedWorkflowPlan } from './type-checker.js';
 
 type StateChangeCallback = (
   runId: string, node: string, fromState: NodeState, toState: NodeState, event: string, terminalId?: string
@@ -64,6 +66,7 @@ export class DagExecutor {
   private readonly pool = new EvolutionaryPool();
   private readonly registryClient: RegistryClient | null;
   private valueStore: ValueStore | null = null;
+  private resolvedPlan: ResolvedWorkflowPlan | null = null;
 
   constructor(
     workflowConfig: WorkflowConfig,
@@ -113,6 +116,22 @@ export class DagExecutor {
   async start(inputManifest?: import('./input-types.js').InputManifest | null): Promise<void> {
     this.startedAt = Date.now();
     this.bootstrap.setCwd(this.workspacePath);
+
+    // Type-check the workflow before scheduling any nodes.
+    if (this.registryClient) {
+      const typeCheckResult = checkWorkflow(
+        this.workflowConfig,
+        this.registryClient,
+        this.registryClient.getSchemaRegistry(),
+      );
+      if (!typeCheckResult.ok) {
+        throw new Error(
+          `Workflow type check failed:\n` +
+          typeCheckResult.errors.map((e) => e.message).join('\n\n'),
+        );
+      }
+      this.resolvedPlan = typeCheckResult.resolvedPlan;
+    }
 
     await this.initializeRunDirectory(inputManifest);
 

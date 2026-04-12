@@ -70,6 +70,8 @@ export const BUILTIN_SCHEMAS: readonly SchemaDef[] = [
     encoding: 'pickle_b64',
     description: 'Multi-dimensional numeric array.',
     source: 'builtin',
+    validatorModule: 'schemas/validators/numpy_array.py',
+    validatorFunction: 'validate',
     summarizer(payload: unknown) {
       try {
         if (!payload || typeof payload !== 'object') return null;
@@ -119,6 +121,8 @@ export const BUILTIN_SCHEMAS: readonly SchemaDef[] = [
     encoding: 'pickle_b64',
     description: 'A symbolic mathematical expression (sympy.Expr). Encoded as pickle_b64.',
     source: 'builtin',
+    validatorModule: 'schemas/validators/symbolic_expr.py',
+    validatorFunction: 'validate',
   },
   {
     name: 'Series',
@@ -135,6 +139,8 @@ export const BUILTIN_SCHEMAS: readonly SchemaDef[] = [
     encoding: 'pickle_b64',
     description: 'pandas DataFrame with open/high/low/close columns indexed by timestamp.',
     source: 'builtin',
+    validatorModule: 'schemas/validators/ohlc_frame.py',
+    validatorFunction: 'validate',
   },
   {
     name: 'FeaturesFrame',
@@ -143,6 +149,8 @@ export const BUILTIN_SCHEMAS: readonly SchemaDef[] = [
     encoding: 'pickle_b64',
     description: 'pandas DataFrame of computed numeric features indexed by timestamp.',
     source: 'builtin',
+    validatorModule: 'schemas/validators/features_frame.py',
+    validatorFunction: 'validate',
   },
   {
     name: 'ReturnSeries',

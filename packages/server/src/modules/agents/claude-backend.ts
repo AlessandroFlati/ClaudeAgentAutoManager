@@ -103,6 +103,7 @@ export class ClaudeBackend implements AgentBackend {
 
     return {
       content: assistantText,
+      text: assistantText,
       toolCalls: [],
       stopReason: data.stop_reason,
     };

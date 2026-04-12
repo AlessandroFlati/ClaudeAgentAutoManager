@@ -121,6 +121,7 @@ export class OllamaBackend implements AgentBackend {
 
     return {
       content: cleanContent,
+      text: cleanContent,
       toolCalls: [],
       stopReason: data.done_reason,
     };

@@ -106,6 +106,7 @@ export class OpenAICompatBackend implements AgentBackend {
 
     return {
       content: assistantText,
+      text: assistantText,
       toolCalls: [],
       stopReason: data.choices[0].finish_reason,
     };

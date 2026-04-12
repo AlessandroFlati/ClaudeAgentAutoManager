@@ -48,13 +48,15 @@ export interface UserMessage {
 
 /**
  * The assistant's response from a sendMessage or sendToolResults call.
- * In Phase 1, toolCalls is always an empty array (backends never return
- * tool_use blocks when toolDefinitions is empty).
+ * Phase 3: `text` is the primary text field; `toolCalls` is populated when
+ * the backend returns tool_use blocks. `content` is kept for backward compat.
  */
 export interface AssistantMessage {
+  /** @deprecated Use `text` instead. Kept for backward compatibility. */
   content: string;
-  toolCalls: ToolCall[];  // Always [] in Phase 1
-  stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | string;
+  text: string;
+  toolCalls?: ToolCall[];  // populated when backend returns tool_use blocks
+  stopReason?: string;
 }
 
 /** A tool call from the LLM — used in Phase 3. */
@@ -67,9 +69,8 @@ export interface ToolCall {
 /** A tool result to send back to the LLM — used in Phase 3. */
 export interface ToolResult {
   toolCallId: string;
-  toolName: string;
-  content: string;          // JSON-serialized result or error
-  isError: boolean;
+  content: string;        // JSON-encoded result or error message
+  isError?: boolean;
 }
 
 /**
@@ -82,7 +83,16 @@ export type BackendErrorCategory =
   | 'backend_error'
   | 'backend_unavailable'
   | 'conversation_not_found'
-  | 'not_implemented';
+  | 'not_implemented'
+  // Phase 3 additions:
+  | 'tool_not_allowed'        // LLM called tool not in toolset
+  | 'tool_budget_exhausted'   // same tool failed N consecutive times
+  | 'max_turns_exceeded'      // loop hit maxTurns and LLM still emitted tool calls
+  | 'signal_parse_error'      // no valid signal block after corrective re-prompt
+  | 'wall_clock_timeout'      // node ran longer than wallClockTimeoutMs
+  | 'context_exceeded'        // LLM context window full
+  | 'toolset_empty_glob'      // glob in toolset matched zero tools
+  | 'handle_not_found';       // LLM referenced value handle not in scope
 
 export class BackendError extends Error {
   readonly category: BackendErrorCategory;

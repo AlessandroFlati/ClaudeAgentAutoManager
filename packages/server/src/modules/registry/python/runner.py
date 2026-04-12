@@ -41,7 +41,12 @@ import importlib.util
 from pathlib import Path
 
 
-PICKLE_SCHEMAS = {"NumpyArray", "DataFrame", "SymbolicExpr"}
+PICKLE_SCHEMAS = {
+    'NumpyArray', 'DataFrame', 'SymbolicExpr',
+    'Series', 'OhlcFrame', 'FeaturesFrame',
+    'ReturnSeries', 'SignalSeries', 'Statistics',
+    'RegressionModel', 'ClusteringModel',
+}
 
 
 def _make_summary(schema_name, value):
@@ -72,6 +77,40 @@ def _make_summary(schema_name, value):
                 return s[:200] + '...' if len(s) > 200 else s
             except Exception:
                 return '<unprintable SymbolicExpr>'
+        if schema_name == 'Series':
+            try:
+                return f"Series name={value.name!r} dtype={value.dtype} len={len(value)} sample={value.head(3).to_dict()}"
+            except Exception:
+                return '<unprintable Series>'
+        if schema_name == 'OhlcFrame':
+            try:
+                idx = value.index
+                return f"OhlcFrame shape={value.shape} cols={list(value.columns)} dates={idx[0]}..{idx[-1]}"
+            except Exception:
+                return '<unprintable OhlcFrame>'
+        if schema_name == 'FeaturesFrame':
+            try:
+                return f"FeaturesFrame shape={value.shape} features={list(value.columns)[:5]}"
+            except Exception:
+                return '<unprintable FeaturesFrame>'
+        if schema_name == 'ReturnSeries':
+            try:
+                import numpy as np
+                return f"ReturnSeries len={len(value)} mean={np.mean(value):.6f} std={np.std(value):.6f}"
+            except Exception:
+                return '<unprintable ReturnSeries>'
+        if schema_name == 'SignalSeries':
+            try:
+                return f"SignalSeries len={len(value)} unique={sorted(value.unique().tolist())} counts={value.value_counts().to_dict()}"
+            except Exception:
+                return '<unprintable SignalSeries>'
+        if schema_name == 'Statistics':
+            try:
+                keys = list(value.keys())
+                sample = {k: value[k] for k in keys[:4]}
+                return f"Statistics keys={keys} sample={sample}"
+            except Exception:
+                return '<unprintable Statistics>'
     except Exception:
         return None
     return None

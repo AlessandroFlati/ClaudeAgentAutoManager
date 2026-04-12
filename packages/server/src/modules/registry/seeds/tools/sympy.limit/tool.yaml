@@ -1,0 +1,34 @@
+name: sympy.limit
+version: 1
+description: Compute the limit of a symbolic expression as a variable approaches a point.
+category: symbolic_math
+tags: [sympy, symbolic, limit, calculus]
+
+inputs:
+  expr:
+    schema: SymbolicExpr
+    required: true
+    description: Symbolic expression to take the limit of.
+  variable:
+    schema: String
+    required: true
+    description: Name of the variable approaching the limit point.
+  point:
+    schema: String
+    required: true
+    description: The point the variable approaches (e.g., "0", "oo", "-oo").
+
+outputs:
+  result:
+    schema: SymbolicExpr
+    description: Limit of the symbolic expression.
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [sympy]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: fast

@@ -56,4 +56,10 @@ export const SEED_TOOLS: SeedToolDef[] = [
   { name: 'statsmodels.granger_causality', relPath: './tools/statsmodels.granger_causality/tool.yaml' },
   { name: 'ta.compute_rsi',            relPath: './tools/ta.compute_rsi/tool.yaml' },
   { name: 'ta.compute_atr',            relPath: './tools/ta.compute_atr/tool.yaml' },
+  { name: 'sympy.simplify',     relPath: './tools/sympy.simplify/tool.yaml' },
+  { name: 'sympy.solve',        relPath: './tools/sympy.solve/tool.yaml' },
+  { name: 'sympy.factor',       relPath: './tools/sympy.factor/tool.yaml' },
+  { name: 'sympy.integrate',    relPath: './tools/sympy.integrate/tool.yaml' },
+  { name: 'sympy.differentiate', relPath: './tools/sympy.differentiate/tool.yaml' },
+  { name: 'sympy.limit',        relPath: './tools/sympy.limit/tool.yaml' },
 ];

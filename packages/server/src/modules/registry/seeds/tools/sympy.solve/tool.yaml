@@ -1,0 +1,30 @@
+name: sympy.solve
+version: 1
+description: Solve a symbolic equation for a given variable using SymPy.
+category: symbolic_math
+tags: [sympy, symbolic, solve, algebra]
+
+inputs:
+  expr:
+    schema: SymbolicExpr
+    required: true
+    description: Symbolic expression (assumed equal to zero) to solve.
+  variable:
+    schema: String
+    required: true
+    description: Name of the variable to solve for.
+
+outputs:
+  solutions:
+    schema: JsonArray
+    description: List of solutions as strings.
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [sympy]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: fast

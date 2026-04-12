@@ -1,0 +1,30 @@
+name: sympy.integrate
+version: 1
+description: Compute the indefinite integral of a symbolic expression with respect to a variable.
+category: symbolic_math
+tags: [sympy, symbolic, integration, calculus]
+
+inputs:
+  expr:
+    schema: SymbolicExpr
+    required: true
+    description: Symbolic expression to integrate.
+  variable:
+    schema: String
+    required: true
+    description: Name of the variable of integration.
+
+outputs:
+  result:
+    schema: SymbolicExpr
+    description: Integrated symbolic expression (indefinite integral, no constant).
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [sympy]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: fast

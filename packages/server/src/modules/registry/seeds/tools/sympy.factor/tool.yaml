@@ -1,0 +1,26 @@
+name: sympy.factor
+version: 1
+description: Factor a symbolic polynomial expression using SymPy.
+category: symbolic_math
+tags: [sympy, symbolic, factor, algebra, polynomial]
+
+inputs:
+  expr:
+    schema: SymbolicExpr
+    required: true
+    description: Symbolic expression to factor.
+
+outputs:
+  result:
+    schema: SymbolicExpr
+    description: Factored symbolic expression.
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [sympy]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: fast

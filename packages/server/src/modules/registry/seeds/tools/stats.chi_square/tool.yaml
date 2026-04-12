@@ -1,0 +1,22 @@
+name: stats.chi_square
+version: 1
+description: Perform a chi-square goodness-of-fit test on observed frequencies.
+category: hypothesis_testing
+inputs:
+  observed:
+    schema: NumpyArray
+    required: true
+    description: Observed frequency counts (1-D array of non-negative integers).
+outputs:
+  statistic:
+    schema: Float
+    description: Chi-square statistic.
+  p_value:
+    schema: Float
+    description: p-value.
+  dof:
+    schema: Integer
+    description: Degrees of freedom.
+implementation:
+  language: python
+  entry_point: tool.py:run

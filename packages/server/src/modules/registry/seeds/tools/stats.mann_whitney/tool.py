@@ -1,0 +1,7 @@
+def run(a, b):
+    import numpy as np
+    from scipy import stats
+    a_arr = np.array(a, dtype=float)
+    b_arr = np.array(b, dtype=float)
+    result = stats.mannwhitneyu(a_arr, b_arr, alternative='two-sided')
+    return {"statistic": float(result.statistic), "p_value": float(result.pvalue)}

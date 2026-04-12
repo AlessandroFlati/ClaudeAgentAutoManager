@@ -1,0 +1,27 @@
+name: stats.bootstrap_ci
+version: 1
+description: Compute a bootstrap confidence interval for the mean of a sample.
+category: hypothesis_testing
+inputs:
+  data:
+    schema: NumpyArray
+    required: true
+    description: Input sample (1-D array of numbers).
+  confidence:
+    schema: Float
+    required: true
+    description: Confidence level (e.g. 0.95 for 95% CI).
+  n_resamples:
+    schema: Integer
+    required: true
+    description: Number of bootstrap resamples (e.g. 1000).
+outputs:
+  ci_low:
+    schema: Float
+    description: Lower bound of the confidence interval.
+  ci_high:
+    schema: Float
+    description: Upper bound of the confidence interval.
+implementation:
+  language: python
+  entry_point: tool.py:run

@@ -1,0 +1,27 @@
+name: stats.permutation_test
+version: 1
+description: Perform a two-sample permutation test using the difference of means as the test statistic.
+category: hypothesis_testing
+inputs:
+  a:
+    schema: NumpyArray
+    required: true
+    description: First sample (1-D array of numbers).
+  b:
+    schema: NumpyArray
+    required: true
+    description: Second sample (1-D array of numbers).
+  n_resamples:
+    schema: Integer
+    required: true
+    description: Number of permutation resamples (e.g. 1000).
+outputs:
+  statistic:
+    schema: Float
+    description: Observed test statistic (difference of means).
+  p_value:
+    schema: Float
+    description: Permutation p-value.
+implementation:
+  language: python
+  entry_point: tool.py:run

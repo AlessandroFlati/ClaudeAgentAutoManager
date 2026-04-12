@@ -1,0 +1,23 @@
+name: stats.ljung_box
+version: 1
+description: Perform the Ljung-Box test for autocorrelation in residuals.
+category: hypothesis_testing
+inputs:
+  residuals:
+    schema: NumpyArray
+    required: true
+    description: Residual series (1-D array of numbers).
+  lags:
+    schema: Integer
+    required: true
+    description: Number of lags to test.
+outputs:
+  statistic:
+    schema: Float
+    description: Ljung-Box Q statistic at the specified lag.
+  p_value:
+    schema: Float
+    description: p-value at the specified lag.
+implementation:
+  language: python
+  entry_point: tool.py:run

@@ -1,0 +1,23 @@
+name: stats.ks_test
+version: 1
+description: Perform the two-sample Kolmogorov-Smirnov test.
+category: hypothesis_testing
+inputs:
+  a:
+    schema: NumpyArray
+    required: true
+    description: First sample (1-D array of numbers).
+  b:
+    schema: NumpyArray
+    required: true
+    description: Second sample (1-D array of numbers).
+outputs:
+  statistic:
+    schema: Float
+    description: KS statistic (maximum absolute difference between CDFs).
+  p_value:
+    schema: Float
+    description: Two-sided p-value.
+implementation:
+  language: python
+  entry_point: tool.py:run

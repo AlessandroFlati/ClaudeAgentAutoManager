@@ -28,4 +28,12 @@ export const SEED_TOOLS: SeedToolDef[] = [
   { name: 'pandas.save_parquet',     relPath: './tools/pandas.save_parquet/tool.yaml' },
   { name: 'yaml.load',               relPath: './tools/yaml.load/tool.yaml' },
   { name: 'yaml.dump',               relPath: './tools/yaml.dump/tool.yaml' },
+  { name: 'stats.t_test',            relPath: './tools/stats.t_test/tool.yaml' },
+  { name: 'stats.mann_whitney',      relPath: './tools/stats.mann_whitney/tool.yaml' },
+  { name: 'stats.ks_test',          relPath: './tools/stats.ks_test/tool.yaml' },
+  { name: 'stats.chi_square',       relPath: './tools/stats.chi_square/tool.yaml' },
+  { name: 'stats.permutation_test', relPath: './tools/stats.permutation_test/tool.yaml' },
+  { name: 'stats.bootstrap_ci',     relPath: './tools/stats.bootstrap_ci/tool.yaml' },
+  { name: 'stats.adf_test',         relPath: './tools/stats.adf_test/tool.yaml' },
+  { name: 'stats.ljung_box',        relPath: './tools/stats.ljung_box/tool.yaml' },
 ];

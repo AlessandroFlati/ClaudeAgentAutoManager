@@ -1,0 +1,23 @@
+name: stats.t_test
+version: 1
+description: Perform an independent two-sample t-test.
+category: hypothesis_testing
+inputs:
+  a:
+    schema: NumpyArray
+    required: true
+    description: First sample (1-D array of numbers).
+  b:
+    schema: NumpyArray
+    required: true
+    description: Second sample (1-D array of numbers).
+outputs:
+  statistic:
+    schema: Float
+    description: t-statistic.
+  p_value:
+    schema: Float
+    description: Two-tailed p-value.
+implementation:
+  language: python
+  entry_point: tool.py:run

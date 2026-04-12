@@ -53,18 +53,18 @@ describe('time_series seeds — integration', () => {
       const tool = await client.get('statsmodels.arima');
       expect(tool).toBeDefined();
       expect(tool!.category).toBe('time_series');
-      expect(tool!.inputs).toHaveLength(4);
+      expect(tool!.inputs).toHaveLength(3);
       const inNames = tool!.inputs.map((i) => i.name);
-      expect(inNames).toContain('values');
-      expect(inNames).toContain('order_p');
-      expect(inNames).toContain('order_d');
-      expect(inNames).toContain('order_q');
-      expect(tool!.outputs).toHaveLength(4);
+      expect(inNames).toContain('series');
+      expect(inNames).toContain('order');
+      expect(inNames).toContain('extra_params');
+      expect(tool!.outputs).toHaveLength(5);
       const outNames = tool!.outputs.map((o) => o.name);
       expect(outNames).toContain('aic');
       expect(outNames).toContain('bic');
-      expect(outNames).toContain('params');
       expect(outNames).toContain('residuals');
+      expect(outNames).toContain('fitted');
+      expect(outNames).toContain('model');
     }
   );
 

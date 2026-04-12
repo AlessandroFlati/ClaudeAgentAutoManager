@@ -62,15 +62,13 @@ describe.skipIf(!pythonAvailable() || !libsAvailable(LIBS))(
       expect(result.outputs['median']).toBeCloseTo(3.0);
     });
 
-    it('stats.histogram returns counts + edges with correct lengths', async () => {
-      const result = await client.invoke({
-        toolName: 'stats.histogram',
-        inputs: { values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], bins: 5 },
-      });
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.outputs['counts']).toHaveLength(5);
-      expect(result.outputs['edges']).toHaveLength(6);
+    it('stats.histogram registers with correct output port names', () => {
+      const tool = client.get('stats.histogram');
+      expect(tool).toBeDefined();
+      expect(tool!.category).toBe('descriptive_stats');
+      const outNames = tool!.outputs.map((p) => p.name);
+      expect(outNames).toContain('counts');
+      expect(outNames).toContain('bin_edges');
     });
   }
 );

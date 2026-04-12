@@ -52,11 +52,12 @@ describe('clustering seeds — integration', () => {
       const tool = await client.get('sklearn.kmeans');
       expect(tool).toBeDefined();
       expect(tool!.category).toBe('clustering');
-      expect(tool!.outputs).toHaveLength(3);
+      expect(tool!.outputs).toHaveLength(4);
       const outNames = tool!.outputs.map((o) => o.name);
       expect(outNames).toContain('labels');
-      expect(outNames).toContain('centroids');
+      expect(outNames).toContain('centers');
       expect(outNames).toContain('inertia');
+      expect(outNames).toContain('model');
     }
   );
 
@@ -67,10 +68,11 @@ describe('clustering seeds — integration', () => {
       expect(tool).toBeDefined();
       expect(tool!.category).toBe('clustering');
       expect(tool!.inputs).toHaveLength(3);
-      expect(tool!.outputs).toHaveLength(2);
+      expect(tool!.outputs).toHaveLength(3);
       const outNames = tool!.outputs.map((o) => o.name);
       expect(outNames).toContain('labels');
       expect(outNames).toContain('n_clusters');
+      expect(outNames).toContain('n_noise');
     }
   );
 

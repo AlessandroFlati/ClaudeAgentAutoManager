@@ -117,7 +117,7 @@ describe.skipIf(!pythonAvailable() || !libsAvailable(PARQUET_LIBS))(
       const tool = client.get('pandas.save_parquet');
       expect(tool).toBeDefined();
       expect(tool!.category).toBe('data_io');
-      expect(tool!.outputs[0].schemaName).toBe('Boolean');
+      expect(tool!.outputs[0].schemaName).toBe('String');
     });
 
     // Note: pandas.load_parquet invocation test is primitive-invocable (output only).

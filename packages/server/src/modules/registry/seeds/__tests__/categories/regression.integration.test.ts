@@ -66,8 +66,8 @@ describe.skipIf(!pythonAvailable() || !libsAvailable(SKLEARN_LIBS))(
       expect(coefPort!.schemaName).toBe('NumpyArray');
     });
 
-    it('sklearn.ridge registers with alpha input and r_squared output', () => {
-      const tool = client.get('sklearn.ridge');
+    it('sklearn.ridge_regression registers with alpha input and r_squared output', () => {
+      const tool = client.get('sklearn.ridge_regression');
       expect(tool).toBeDefined();
       expect(tool!.category).toBe('regression');
       const inputNames = tool!.inputs.map((p) => p.name);
@@ -114,7 +114,7 @@ describe.skipIf(!pythonAvailable() || !libsAvailable(STATSMODELS_LIBS))(
       expect(tool).toBeDefined();
       expect(tool!.category).toBe('regression');
       const inputNames = tool!.inputs.map((p) => p.name);
-      expect(inputNames).toContain('X');
+      expect(inputNames).toContain('x');
       expect(inputNames).toContain('y');
       expect(inputNames).toContain('family');
       const familyPort = tool!.inputs.find((p) => p.name === 'family');
@@ -122,9 +122,9 @@ describe.skipIf(!pythonAvailable() || !libsAvailable(STATSMODELS_LIBS))(
       const outputNames = tool!.outputs.map((p) => p.name);
       expect(outputNames).toContain('coefficients');
       expect(outputNames).toContain('p_values');
-      expect(outputNames).toContain('aic');
-      const aicPort = tool!.outputs.find((p) => p.name === 'aic');
-      expect(aicPort!.schemaName).toBe('Float');
+      expect(outputNames).toContain('model');
+      const modelPort = tool!.outputs.find((p) => p.name === 'model');
+      expect(modelPort!.schemaName).toBe('RegressionModel');
     });
   }
 );

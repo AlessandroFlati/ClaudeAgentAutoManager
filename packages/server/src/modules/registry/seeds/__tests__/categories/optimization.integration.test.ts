@@ -52,17 +52,17 @@ describe('optimization seeds — integration', () => {
       expect(tool).toBeDefined();
       expect(tool!.category).toBe('optimization');
       const inputNames = tool!.inputs.map((i) => i.name);
-      expect(inputNames).toContain('x0');
+      expect(inputNames).toContain('initial_guess');
       expect(inputNames).toContain('method');
-      expect(inputNames).toContain('func_name');
-      const funcNamePort = tool!.inputs.find((i) => i.name === 'func_name');
+      expect(inputNames).toContain('function');
+      const funcNamePort = tool!.inputs.find((i) => i.name === 'function');
       expect(funcNamePort).toBeDefined();
       expect(funcNamePort!.schemaName).toBe('String');
       const outputNames = tool!.outputs.map((o) => o.name);
       expect(outputNames).toContain('x');
       expect(outputNames).toContain('fun');
       expect(outputNames).toContain('success');
-      expect(outputNames).toContain('message');
+      expect(outputNames).toContain('n_iter');
     }
   );
 

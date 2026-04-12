@@ -108,8 +108,8 @@ describe.skipIf(!pythonAvailable() || !pandasAvailable)(
         console.error('stats.describe failed:', descResult.error);
         return;
       }
-      // stats.describe() returns a JsonObject summary
-      const summary = descResult.outputs['summary'];
+      // stats.describe() returns a DataFrame of summary statistics
+      const summary = descResult.outputs['stats'];
       expect(typeof summary).toBe('object');
       expect(summary).not.toBeNull();
     });

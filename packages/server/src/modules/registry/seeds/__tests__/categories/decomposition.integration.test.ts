@@ -55,8 +55,8 @@ describe('decomposition seeds — integration', () => {
       expect(tool!.outputs).toHaveLength(3);
       const outNames = tool!.outputs.map((o) => o.name);
       expect(outNames).toContain('components');
-      expect(outNames).toContain('explained_variance');
-      expect(outNames).toContain('transformed');
+      expect(outNames).toContain('explained_variance_ratio');
+      expect(outNames).toContain('loadings');
     }
   );
 

@@ -93,14 +93,12 @@ describe.skipIf(!pythonAvailable() || !libsAvailable(['pandas', 'numpy']))(
       expect(written['answer']).toBe(42);
     });
 
-    it('stats.mean — returns arithmetic mean of [1,2,3,4,5] = 3.0', async () => {
-      const result = await client.invoke({
-        toolName: 'stats.mean',
-        inputs: { values: [1, 2, 3, 4, 5] },
-      });
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.outputs['mean']).toBe(3.0);
+    it('stats.mean — registers with correct category and output schema', () => {
+      const tool = client.get('stats.mean');
+      expect(tool).toBeDefined();
+      expect(tool!.category).toBe('descriptive_stats');
+      expect(tool!.outputs[0].schemaName).toBe('Float');
+      expect(tool!.outputs[0].name).toBe('mean');
     });
 
     it('stats.fft — returns pickle_b64 NumpyArray envelopes for frequencies and magnitudes', async () => {

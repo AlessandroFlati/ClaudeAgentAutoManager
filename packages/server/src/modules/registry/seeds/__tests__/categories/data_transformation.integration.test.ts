@@ -47,9 +47,9 @@ describe('data_transformation seeds — integration', () => {
   });
 
   it.skipIf(!pythonAvailable() || !libsAvailable(LIBS))(
-    'pandas.filter registers with correct category and DataFrame input/output',
+    'pandas.filter_rows registers with correct category and DataFrame input/output',
     async () => {
-      const tool = await client.get('pandas.filter');
+      const tool = await client.get('pandas.filter_rows');
       expect(tool).toBeDefined();
       expect(tool!.category).toBe('data_transformation');
       const inputNames = tool!.inputs.map((i) => i.name);
@@ -58,7 +58,7 @@ describe('data_transformation seeds — integration', () => {
       const dfInput = tool!.inputs.find((i) => i.name === 'df');
       expect(dfInput!.schemaName).toBe('DataFrame');
       expect(tool!.outputs).toHaveLength(1);
-      expect(tool!.outputs[0].name).toBe('result');
+      expect(tool!.outputs[0].name).toBe('filtered');
       expect(tool!.outputs[0].schemaName).toBe('DataFrame');
     }
   );

@@ -54,10 +54,12 @@ describe.skipIf(!pythonAvailable() || !libsAvailable(SCIPY_LIBS))(
       expect(tool).toBeDefined();
       expect(tool!.category).toBe('hypothesis_testing');
       const inputNames = tool!.inputs.map((p) => p.name);
-      expect(inputNames).toContain('a');
-      expect(inputNames).toContain('b');
-      const inputSchemas = tool!.inputs.map((p) => p.schemaName);
-      expect(inputSchemas).toEqual(['NumpyArray', 'NumpyArray']);
+      expect(inputNames).toContain('sample_a');
+      expect(inputNames).toContain('sample_b');
+      const sampleAPort = tool!.inputs.find((p) => p.name === 'sample_a');
+      const sampleBPort = tool!.inputs.find((p) => p.name === 'sample_b');
+      expect(sampleAPort!.schemaName).toBe('NumpyArray');
+      expect(sampleBPort!.schemaName).toBe('NumpyArray');
       const outputNames = tool!.outputs.map((p) => p.name);
       expect(outputNames).toContain('statistic');
       expect(outputNames).toContain('p_value');

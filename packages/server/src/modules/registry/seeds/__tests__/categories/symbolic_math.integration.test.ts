@@ -52,11 +52,13 @@ describe('symbolic_math seeds — integration', () => {
       const tool = await client.get('sympy.simplify');
       expect(tool).toBeDefined();
       expect(tool!.category).toBe('symbolic_math');
-      expect(tool!.inputs).toHaveLength(1);
-      expect(tool!.inputs[0].name).toBe('expr');
-      expect(tool!.inputs[0].schemaName).toBe('SymbolicExpr');
+      expect(tool!.inputs).toHaveLength(2);
+      const inputNames = tool!.inputs.map((i) => i.name);
+      expect(inputNames).toContain('expression');
+      const exprInput = tool!.inputs.find((i) => i.name === 'expression');
+      expect(exprInput!.schemaName).toBe('SymbolicExpr');
       expect(tool!.outputs).toHaveLength(1);
-      expect(tool!.outputs[0].name).toBe('result');
+      expect(tool!.outputs[0].name).toBe('simplified');
       expect(tool!.outputs[0].schemaName).toBe('SymbolicExpr');
     }
   );

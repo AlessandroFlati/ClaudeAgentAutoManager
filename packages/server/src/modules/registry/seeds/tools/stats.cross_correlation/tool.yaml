@@ -1,6 +1,7 @@
 name: stats.cross_correlation
 version: 1
 description: Compute the cross-correlation function between two equal-length signals.
+category: descriptive_stats
 inputs:
   x:
     schema: JsonArray

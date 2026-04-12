@@ -1,6 +1,7 @@
 name: stats.histogram
 version: 1
 description: Compute a histogram of a list of numbers.
+category: descriptive_stats
 inputs:
   values:
     schema: JsonArray

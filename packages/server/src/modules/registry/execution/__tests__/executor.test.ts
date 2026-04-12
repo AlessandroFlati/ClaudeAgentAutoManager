@@ -20,12 +20,14 @@ function pythonAvailable(): boolean {
 
 const numpyAvailable = ((): boolean => {
   if (!pythonAvailable()) return false;
-  const r = spawnSync(
-    process.platform === 'win32' ? 'python' : 'python3',
-    ['-c', 'import numpy'],
-    { encoding: 'utf8' },
-  );
-  return r.status === 0;
+  const candidates = process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python'];
+  for (const cmd of candidates) {
+    try {
+      const r = spawnSync(cmd, ['-c', 'import numpy'], { encoding: 'utf8' });
+      if (r.status === 0) return true;
+    } catch { /* continue */ }
+  }
+  return false;
 })();
 
 describe.skipIf(!pythonAvailable())('Executor — happy path (integration)', () => {

@@ -1,6 +1,7 @@
 name: stats.autocorrelation
 version: 1
 description: Compute the autocorrelation function (ACF) of a signal up to max_lag.
+category: descriptive_stats
 inputs:
   values:
     schema: JsonArray

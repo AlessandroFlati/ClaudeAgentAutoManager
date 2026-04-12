@@ -1,6 +1,7 @@
 name: stats.fft
 version: 1
 description: Compute the FFT of a real-valued signal and return frequency bins and magnitudes.
+category: descriptive_stats
 inputs:
   values:
     schema: JsonArray

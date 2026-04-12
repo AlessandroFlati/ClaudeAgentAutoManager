@@ -1,6 +1,7 @@
 name: stats.median
 version: 1
 description: Compute the median of a list of numbers.
+category: descriptive_stats
 inputs:
   values:
     schema: JsonArray

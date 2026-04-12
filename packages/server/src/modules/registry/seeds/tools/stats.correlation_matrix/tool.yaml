@@ -1,6 +1,7 @@
 name: stats.correlation_matrix
 version: 1
 description: Compute the Pearson correlation matrix for all numeric columns in a DataFrame.
+category: descriptive_stats
 inputs:
   df:
     schema: DataFrame

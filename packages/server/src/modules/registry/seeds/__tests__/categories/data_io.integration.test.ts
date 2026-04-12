@@ -19,7 +19,7 @@ function pythonAvailable(): boolean {
 
 function libsAvailable(libs: string[]): boolean {
   if (!pythonAvailable()) return false;
-  const cmd = process.platform === 'win32' ? 'python' : 'python3';
+  const cmd = (() => { const candidates = process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python']; for (const c of candidates) { try { const r = require('child_process').spawnSync(c, ['--version'], { encoding: 'utf8' }); if (r.status === 0) return c; } catch {} } return 'python'; })();
   for (const lib of libs) {
     const importName = lib === 'scikit-learn' ? 'sklearn' : lib === 'pyyaml' ? 'yaml' : lib;
     const r = spawnSync(cmd, ['-c', `import ${importName}`], { encoding: 'utf8' });

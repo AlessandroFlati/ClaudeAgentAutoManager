@@ -1,6 +1,7 @@
 name: statsmodels.ols
 version: 1
 description: Fit an OLS linear regression model using statsmodels and return coefficients, p-values, and R-squared.
+category: regression
 inputs:
   X:
     schema: NumpyArray

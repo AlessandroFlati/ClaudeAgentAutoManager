@@ -1,6 +1,7 @@
 name: stats.quantile
 version: 1
 description: Compute a quantile of a list of numbers.
+category: descriptive_stats
 inputs:
   values:
     schema: JsonArray

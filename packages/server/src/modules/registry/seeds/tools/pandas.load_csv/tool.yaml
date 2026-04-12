@@ -1,6 +1,7 @@
 name: pandas.load_csv
 version: 1
 description: Load a CSV file from disk into a pandas DataFrame.
+category: data_io
 inputs:
   path:
     schema: String

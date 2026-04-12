@@ -1,6 +1,7 @@
 name: stats.describe
 version: 1
 description: Compute descriptive statistics for each numeric column in a DataFrame.
+category: descriptive_stats
 inputs:
   df:
     schema: DataFrame

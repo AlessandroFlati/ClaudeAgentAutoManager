@@ -1,6 +1,7 @@
 name: sklearn.linear_regression
 version: 1
 description: Fit an OLS linear regression model using scikit-learn and return coefficients, intercept, and R-squared.
+category: regression
 inputs:
   X:
     schema: NumpyArray

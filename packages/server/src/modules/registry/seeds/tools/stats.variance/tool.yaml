@@ -1,6 +1,7 @@
 name: stats.variance
 version: 1
 description: Compute the variance of a list of numbers.
+category: descriptive_stats
 inputs:
   values:
     schema: JsonArray

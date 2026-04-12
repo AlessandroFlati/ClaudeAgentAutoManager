@@ -1,6 +1,7 @@
 name: pandas.save_csv
 version: 1
 description: Write a pandas DataFrame to a CSV file on disk.
+category: data_io
 inputs:
   df:
     schema: DataFrame

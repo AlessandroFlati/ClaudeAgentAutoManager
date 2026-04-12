@@ -84,6 +84,23 @@ export class ValueStore {
     return this.map.has(handle);
   }
 
+  /**
+   * Import a value envelope from an external (scope-local) store into this store.
+   * Used when promoting scope-local outputs to the run-level store at node completion.
+   */
+  adopt(handle: string, envelope: ValueEnvelope): void {
+    const stored: StoredValue = {
+      handle,
+      envelope,
+      summary: null,
+      schema: envelope._schema,
+      createdAt: new Date().toISOString(),
+      nodeName: '',
+      portName: '',
+    };
+    this.map.set(handle, stored);
+  }
+
   /** Return all handles currently held in memory. */
   handles(): string[] {
     return [...this.map.keys()];

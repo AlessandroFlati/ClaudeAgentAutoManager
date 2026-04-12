@@ -89,6 +89,8 @@ export interface ReasoningNodeParams {
   maxTurns?: number;                   // default 20
   perToolRetryBudget?: number;         // default 3
   wallClockTimeoutMs?: number;         // default 900_000
+  upstreamHandles?: Array<[string, unknown]>;  // [handle, envelope] pairs to pre-load
+  runLevelStore?: ScopeValueStore;             // run-level store for output promotion
 }
 
 export interface ReasoningNodeResult {
@@ -136,6 +138,13 @@ async function _runLoop(params: ReasoningNodeParams): Promise<ReasoningNodeResul
     perToolRetryBudget = DEFAULT_PER_TOOL_RETRY_BUDGET,
   } = params;
 
+  // Pre-load upstream handles into scope-local store
+  if (params.upstreamHandles) {
+    for (const [handle, envelope] of params.upstreamHandles) {
+      valueStore.put(handle, envelope);
+    }
+  }
+
   const traceLines: string[] = [];
   let turnsUsed = 0;
   let toolCallsTotal = 0;
@@ -166,6 +175,19 @@ async function _runLoop(params: ReasoningNodeParams): Promise<ReasoningNodeResul
         const signal = extractAndParseSignal(response.text);
 
         if (signal !== null) {
+          // Promote declared outputs from scope-local store to run-level store
+          if (params.runLevelStore && signal.outputs && Array.isArray(signal.outputs)) {
+            for (const output of signal.outputs) {
+              if (typeof output === 'object' && output !== null) {
+                const ref = output as Record<string, unknown>;
+                if (typeof ref.value_ref === 'string' && valueStore.has(ref.value_ref as string)) {
+                  const envelope = valueStore.get(ref.value_ref as string);
+                  params.runLevelStore.adopt(ref.value_ref as string, envelope as any);
+                }
+              }
+            }
+          }
+
           return {
             signal,
             reasoningTrace: traceLines.join('\n\n'),

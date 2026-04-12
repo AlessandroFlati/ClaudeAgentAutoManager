@@ -295,3 +295,55 @@ describe('runReasoningNode — wall clock timeout', () => {
     ).rejects.toMatchObject({ category: 'wall_clock_timeout' });
   });
 });
+
+describe('runReasoningNode — scope-local ValueStore lifecycle', () => {
+  it('pre-loads upstream handles into scope store before loop starts', async () => {
+    const scopeStore = mockValueStore();
+    const upstreamHandle = 'vs-upstream-001';
+    const upstreamEnvelope = { _type: 'value_ref', _handle: upstreamHandle, _schema: 'Float' };
+
+    const backend = mockBackend({
+      sendMessage: vi.fn().mockResolvedValue(makeFinalResponse()),
+    });
+
+    await runReasoningNode({
+      ...BASE_PARAMS,
+      backend,
+      registryClient: mockRegistry() as any,
+      valueStore: scopeStore as any,
+      upstreamHandles: [[upstreamHandle, upstreamEnvelope]] as any,
+    });
+
+    expect(scopeStore.put).toHaveBeenCalledWith(upstreamHandle, upstreamEnvelope);
+  });
+
+  it('promotes declared output value_refs from scope store to run-level store', async () => {
+    const scopeStore = mockValueStore();
+    const runLevelStore = mockValueStore();
+    const outputHandle = 'vs-output-001';
+    const outputEnvelope = { _type: 'value_ref', _handle: outputHandle, _schema: 'Int' };
+
+    // Pre-seed scope store with the output handle
+    scopeStore.put(outputHandle, outputEnvelope);
+
+    const signalText = `Done.\n\`\`\`signal\n${JSON.stringify({
+      status: 'success',
+      agent: 'test_agent',
+      outputs: [{ value_ref: outputHandle }],
+    })}\n\`\`\``;
+
+    const backend = mockBackend({
+      sendMessage: vi.fn().mockResolvedValue({ text: signalText, content: signalText, toolCalls: undefined }),
+    });
+
+    await runReasoningNode({
+      ...BASE_PARAMS,
+      backend,
+      registryClient: mockRegistry() as any,
+      valueStore: scopeStore as any,
+      runLevelStore: runLevelStore as any,
+    });
+
+    expect(runLevelStore.adopt).toHaveBeenCalledWith(outputHandle, outputEnvelope);
+  });
+});

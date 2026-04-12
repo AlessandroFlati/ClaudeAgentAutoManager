@@ -26,6 +26,8 @@ import type { RegistryClient } from '../registry/index.js';
 import { ClaudeBackend } from '../agents/claude-backend.js';
 import { OpenAICompatBackend } from '../agents/openai-compat-backend.js';
 import { OllamaBackend } from '../agents/ollama-backend.js';
+import { runReasoningNode } from '../agents/reasoning-runtime.js';
+import { resolveToolset } from '../agents/toolset-resolver.js';
 
 type StateChangeCallback = (
   runId: string, node: string, fromState: NodeState, toState: NodeState, event: string, terminalId?: string
@@ -692,7 +694,68 @@ export class DagExecutor {
       node.startedAt = Date.now();
       node.invocationCount++;
       this.transition(nodeName, 'terminal_created');
-      await this.dispatchNewReasoningNode(nodeName, node, agentName, nodeDef, purpose);
+
+      // Build backend (same logic as the deleted dispatchNewReasoningNode)
+      let selectedBackend: NewAgentBackend;
+      if (backendType === 'claude') {
+        selectedBackend = new ClaudeBackend({
+          baseUrl: nodeDef?.endpoint ?? 'https://api.anthropic.com',
+          apiKey: process.env['ANTHROPIC_API_KEY'] ?? '',
+          model: nodeDef?.model ?? 'claude-sonnet-4-6',
+          maxTokens: nodeDef?.max_tokens,
+        });
+      } else if (backendType === 'openai-compat') {
+        selectedBackend = new OpenAICompatBackend({
+          baseUrl: nodeDef?.endpoint ?? 'http://localhost:8000',
+          apiKey: process.env['OPENAI_API_KEY'],
+          model: nodeDef?.model ?? 'gpt-4o',
+          maxTokens: nodeDef?.max_tokens,
+        });
+      } else {
+        selectedBackend = new OllamaBackend({
+          baseUrl: nodeDef?.endpoint ?? 'http://localhost:11434',
+          model: nodeDef?.model ?? 'qwen3.5:35b',
+          disableThinking: nodeDef?.disable_thinking,
+          maxTokens: nodeDef?.max_tokens,
+        });
+      }
+
+      // Resolve toolset from registry
+      const { definitions: toolDefinitions, toolNameMap } = await resolveToolset(
+        (nodeDef?.toolset ?? []) as import('../agents/toolset-resolver.js').ToolsetEntry[],
+        this.registryClient ?? { getTool: async () => null, listTools: async () => [] } as any,
+      );
+
+      // Create scope-local ValueStore for this node (uses same run/workspace as run-level store)
+      const scopeStore = new ValueStore(this.runId, this.workspacePath);
+
+      // Collect upstream handles (values from prior nodes passed as inputs to this node)
+      // reasoning nodes declare inputs as string[] port references, not key-value maps;
+      // value_ref resolution for reasoning nodes is deferred to a later phase.
+      const upstreamHandles: Array<[string, unknown]> = [];
+
+      const reasoningResult = await runReasoningNode({
+        backend: selectedBackend,
+        toolDefinitions,
+        toolNameMap,
+        registryClient: this.registryClient as any,
+        valueStore: scopeStore as any,
+        runLevelStore: this.valueStore as any,
+        upstreamHandles,
+        runId: this.runId,
+        nodeName,
+        purpose,
+        systemPrompt: this.workflowConfig.shared_context ?? '',
+        model: nodeDef?.model ?? 'claude-sonnet-4-6',
+        maxTokens: nodeDef?.max_tokens,
+        wallClockTimeoutMs: (nodeDef?.timeout_seconds ?? 900) * 1000,
+      });
+
+      // reasoningResult.signal is the parsed SignalFile; write it as node output
+      const signalDir = path.join(this.workspacePath, '.plurics', 'runs', this.runId, 'signals');
+      await fs.mkdir(signalDir, { recursive: true });
+      const filename = `${agentName}.done.json`;
+      await writeJsonAtomic(path.join(signalDir, filename), reasoningResult.signal);
       return;
     }
 
@@ -1401,75 +1464,4 @@ export class DagExecutor {
     await writeJsonAtomic(path.join(signalDir, filename), signal);
   }
 
-  /**
-   * Dispatch a kind:reasoning node through one of the new HTTP fetch backends
-   * (claude, openai-compat, ollama). The LLM's text response is treated as the
-   * node's raw output and processed by the existing signal-parsing path.
-   *
-   * Phase 1: toolDefinitions is always empty. The LLM will attempt to produce
-   * a Signal Protocol JSON block in its text output. Without tool access, this
-   * will fail for workflows that require bash commands. This is the documented
-   * capability regression — use backend:claude-code for live workflows until NR Phase 3.
-   */
-  private async dispatchNewReasoningNode(
-    nodeName: string,
-    node: DagNode,
-    agentName: string,
-    nodeDef: import('./types.js').WorkflowNodeDef | undefined,
-    purpose: string,
-  ): Promise<void> {
-    const backendType = nodeDef?.backend ?? 'claude-code';
-    let backend: NewAgentBackend;
-
-    if (backendType === 'claude') {
-      backend = new ClaudeBackend({
-        baseUrl: nodeDef?.endpoint ?? 'https://api.anthropic.com',
-        apiKey: process.env['ANTHROPIC_API_KEY'] ?? '',
-        model: nodeDef?.model ?? 'claude-sonnet-4-6',
-        maxTokens: nodeDef?.max_tokens,
-      });
-    } else if (backendType === 'openai-compat') {
-      backend = new OpenAICompatBackend({
-        baseUrl: nodeDef?.endpoint ?? 'http://localhost:8000',
-        apiKey: process.env['OPENAI_API_KEY'],
-        model: nodeDef?.model ?? 'gpt-4o',
-        maxTokens: nodeDef?.max_tokens,
-      });
-    } else if (backendType === 'ollama') {
-      backend = new OllamaBackend({
-        baseUrl: nodeDef?.endpoint ?? 'http://localhost:11434',
-        model: nodeDef?.model ?? 'qwen3.5:35b',
-        disableThinking: nodeDef?.disable_thinking,
-        maxTokens: nodeDef?.max_tokens,
-      });
-    } else {
-      throw new Error(`dispatchNewReasoningNode: unexpected backendType '${backendType}'`);
-    }
-
-    const handle = await backend.startConversation({
-      systemPrompt: this.workflowConfig.shared_context,
-      toolDefinitions: [],  // Phase 1: always empty
-      model: nodeDef?.model ?? backend.backendType,
-      maxTokens: nodeDef?.max_tokens,
-    });
-
-    let assistantMessage;
-    try {
-      assistantMessage = await backend.sendMessage(handle, { content: purpose });
-    } finally {
-      await backend.closeConversation(handle);
-    }
-
-    // Treat the LLM's text as the agent result and generate a signal from it
-    const result: import('../agents/agent-backend.js').AgentResult = {
-      success: true,
-      output: assistantMessage.content,
-      error: null,
-      exitCode: null,
-      durationMs: 0,
-      artifacts: [],
-    };
-
-    await this.generateSignalFromResult(nodeName, agentName, result);
-  }
 }

@@ -8,9 +8,10 @@ import type {
   ToolStatus,
   Stability,
   CostClass,
+  ConverterRecord,
 } from '../types.js';
 
-const EXPECTED_SCHEMA_VERSION = 1;
+const EXPECTED_SCHEMA_VERSION = 2;
 
 const SCHEMA_V1 = `
 CREATE TABLE IF NOT EXISTS registry_meta (
@@ -142,13 +143,43 @@ export class RegistryDb {
       .prepare('SELECT value FROM registry_meta WHERE key = ?')
       .get('schema_version') as { value: string } | undefined;
     if (row === undefined) {
+      // Fresh database: apply all migrations and record current version.
+      this.applyMigrations(0);
       this.db
         .prepare('INSERT INTO registry_meta (key, value) VALUES (?, ?)')
         .run('schema_version', String(EXPECTED_SCHEMA_VERSION));
-    } else if (Number(row.value) !== EXPECTED_SCHEMA_VERSION) {
-      throw new Error(
-        `registry.db schema_version ${row.value} is not supported (expected ${EXPECTED_SCHEMA_VERSION})`,
-      );
+    } else {
+      const currentVersion = Number(row.value);
+      if (currentVersion < EXPECTED_SCHEMA_VERSION) {
+        this.applyMigrations(currentVersion);
+        this.db
+          .prepare('UPDATE registry_meta SET value = ? WHERE key = ?')
+          .run(String(EXPECTED_SCHEMA_VERSION), 'schema_version');
+      } else if (currentVersion > EXPECTED_SCHEMA_VERSION) {
+        throw new Error(
+          `registry.db schema_version ${row.value} is not supported (expected ${EXPECTED_SCHEMA_VERSION})`,
+        );
+      }
+    }
+  }
+
+  private applyMigrations(currentVersion: number): void {
+    const db = this.db!;
+    if (currentVersion < 2) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS converters (
+          id               INTEGER PRIMARY KEY AUTOINCREMENT,
+          source_schema    TEXT NOT NULL,
+          target_schema    TEXT NOT NULL,
+          tool_name        TEXT NOT NULL,
+          tool_version     INTEGER NOT NULL,
+          registered_at    TEXT NOT NULL,
+          UNIQUE(source_schema, target_schema)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_converters_pair
+          ON converters(source_schema, target_schema);
+      `);
     }
   }
 
@@ -366,6 +397,63 @@ export class RegistryDb {
       status: row.status as ToolStatus,
       directory: '', // filled in by the client layer which knows the layout
     };
+  }
+
+  // ---------- Converters ----------
+
+  insertConverter(
+    sourceSchema: string,
+    targetSchema: string,
+    toolName: string,
+    toolVersion: number,
+  ): void {
+    const stmt = this.raw().prepare(`
+      INSERT OR REPLACE INTO converters
+        (source_schema, target_schema, tool_name, tool_version, registered_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    stmt.run(sourceSchema, targetSchema, toolName, toolVersion, new Date().toISOString());
+  }
+
+  findConverter(source: string, target: string): ConverterRecord | null {
+    const row = this.raw().prepare(`
+      SELECT source_schema, target_schema, tool_name, tool_version
+      FROM converters
+      WHERE source_schema = ? AND target_schema = ?
+      LIMIT 1
+    `).get(source, target) as {
+      source_schema: string;
+      target_schema: string;
+      tool_name: string;
+      tool_version: number;
+    } | undefined;
+
+    if (!row) return null;
+    return {
+      sourceSchema: row.source_schema,
+      targetSchema: row.target_schema,
+      toolName: row.tool_name,
+      toolVersion: row.tool_version,
+    };
+  }
+
+  listConverters(): ConverterRecord[] {
+    const rows = this.raw().prepare(`
+      SELECT source_schema, target_schema, tool_name, tool_version
+      FROM converters
+      ORDER BY source_schema, target_schema
+    `).all() as Array<{
+      source_schema: string;
+      target_schema: string;
+      tool_name: string;
+      tool_version: number;
+    }>;
+    return rows.map((r) => ({
+      sourceSchema: r.source_schema,
+      targetSchema: r.target_schema,
+      toolName: r.tool_name,
+      toolVersion: r.tool_version,
+    }));
   }
 
   // ---------- Schemas ----------

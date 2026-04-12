@@ -26,8 +26,8 @@ describe('RegistryDb — schema', () => {
     expect(fs.existsSync(dbPath)).toBe(true);
   });
 
-  it('writes schema_version = 1 in registry_meta', () => {
-    expect(db.schemaVersion()).toBe(1);
+  it('writes schema_version = 2 in registry_meta', () => {
+    expect(db.schemaVersion()).toBe(2);
   });
 
   it('creates all expected tables', () => {
@@ -39,6 +39,7 @@ describe('RegistryDb — schema', () => {
         'schemas',
         'registration_log',
         'registry_meta',
+        'converters',
       ]),
     );
   });
@@ -47,7 +48,7 @@ describe('RegistryDb — schema', () => {
     db.close();
     const db2 = new RegistryDb(dbPath);
     db2.initialize();
-    expect(db2.schemaVersion()).toBe(1);
+    expect(db2.schemaVersion()).toBe(2);
     db2.close();
   });
 });

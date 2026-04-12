@@ -45,4 +45,8 @@ export const SEED_TOOLS: SeedToolDef[] = [
   { name: 'sklearn.nmf',  relPath: './tools/sklearn.nmf/tool.yaml' },
   { name: 'sklearn.tsne', relPath: './tools/sklearn.tsne/tool.yaml' },
   { name: 'sklearn.umap', relPath: './tools/sklearn.umap/tool.yaml' },
+  { name: 'sklearn.kmeans',            relPath: './tools/sklearn.kmeans/tool.yaml' },
+  { name: 'sklearn.dbscan',            relPath: './tools/sklearn.dbscan/tool.yaml' },
+  { name: 'sklearn.hierarchical',      relPath: './tools/sklearn.hierarchical/tool.yaml' },
+  { name: 'sklearn.gaussian_mixture',  relPath: './tools/sklearn.gaussian_mixture/tool.yaml' },
 ];

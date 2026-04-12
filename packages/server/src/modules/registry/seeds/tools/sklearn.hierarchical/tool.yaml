@@ -1,0 +1,34 @@
+name: sklearn.hierarchical
+version: 1
+description: Hierarchical clustering — agglomerative clustering of NumpyArray data.
+category: clustering
+tags: [hierarchical, agglomerative, clustering, scikit-learn, numpy]
+
+inputs:
+  X:
+    schema: NumpyArray
+    required: true
+    description: Input data matrix (n_samples x n_features).
+  n_clusters:
+    schema: Integer
+    required: true
+    description: Number of clusters to form.
+  linkage:
+    schema: String
+    required: true
+    description: "Linkage criterion: 'ward', 'complete', 'average', or 'single'."
+
+outputs:
+  labels:
+    schema: NumpyArray
+    description: Cluster labels for each sample (n_samples,).
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [numpy, scikit-learn]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: medium

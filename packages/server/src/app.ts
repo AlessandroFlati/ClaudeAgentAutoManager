@@ -13,6 +13,7 @@ import { seedPresetsFromFilesystem } from './modules/workflow/preset-resolver.js
 import { resolvePluricsPath } from './modules/workflow/utils.js';
 import { RegistryClient } from './modules/registry/index.js';
 import { loadSeedTools } from './modules/registry/seeds/index.js';
+import type { ListFilters, ToolRecord, ToolStatus } from './modules/registry/types.js';
 
 const PORT = parseInt(process.env.PORT ?? '11001', 10);
 
@@ -277,6 +278,148 @@ app.get('/api/workflows/runs/:runId/findings', (req, res) => {
       res.json([]);
     }
   }
+});
+
+// ── Registry endpoints (Tasks 4-7) ──────────────────────────────────────────
+
+app.get('/api/registry/tools', (req, res) => {
+  const filters: ListFilters = {};
+  if (req.query.category) filters.category = req.query.category as string;
+  if (req.query.tags) filters.tags = (req.query.tags as string).split(',');
+  if (req.query.status) filters.statusIn = [(req.query.status as string) as ToolStatus];
+  const tools = toolRegistry.listTools(filters);
+  const byName = new Map<string, ToolRecord>();
+  const versionCount = new Map<string, number>();
+  for (const t of tools) {
+    const existing = byName.get(t.name);
+    if (!existing || t.version > existing.version) byName.set(t.name, t);
+    versionCount.set(t.name, (versionCount.get(t.name) ?? 0) + 1);
+  }
+  const result = [...byName.values()].map(t => ({
+    name: t.name, version: t.version, description: t.description,
+    category: t.category, tags: t.tags, stability: t.stability,
+    costClass: t.costClass, status: t.status,
+    versionCount: versionCount.get(t.name) ?? 1,
+  }));
+  res.json({ data: { tools: result, total: result.length } });
+});
+
+app.get('/api/registry/tools/:name', (req, res) => {
+  const versions = toolRegistry.getToolsByName(req.params.name);
+  if (versions.length === 0) {
+    res.status(404).json({ error: { code: 'not_found', message: 'Tool not found' } }); return;
+  }
+  res.json({ data: { name: req.params.name, versions } });
+});
+
+app.get('/api/registry/tools/:name/:version/source', (req, res) => {
+  const version = parseInt(req.params.version, 10);
+  if (isNaN(version)) { res.status(400).json({ error: { code: 'bad_request', message: 'version must be integer' } }); return; }
+  const record = toolRegistry.getTool(req.params.name, version);
+  if (!record) { res.status(404).json({ error: { code: 'not_found', message: 'Tool not found' } }); return; }
+  const [entryFile] = record.entryPoint.split(':');
+  const sourcePath = path.join(record.directory, entryFile);
+  try {
+    const content = fs.readFileSync(sourcePath, 'utf-8');
+    res.type('text/plain').send(content);
+  } catch {
+    res.status(404).json({ error: { code: 'not_found', message: 'Source file not found' } });
+  }
+});
+
+app.get('/api/registry/tools/:name/:version/tests', (req, res) => {
+  const version = parseInt(req.params.version, 10);
+  if (isNaN(version)) { res.status(400).json({ error: { code: 'bad_request', message: 'version must be integer' } }); return; }
+  const record = toolRegistry.getTool(req.params.name, version);
+  if (!record) { res.status(404).json({ error: { code: 'not_found', message: 'Tool not found' } }); return; }
+  const testsPath = path.join(record.directory, 'tests.py');
+  try {
+    const content = fs.readFileSync(testsPath, 'utf-8');
+    res.type('text/plain').send(content);
+  } catch {
+    res.status(404).json({ error: { code: 'not_found', message: 'tests.py not found' } });
+  }
+});
+
+app.post('/api/registry/tools/:name/:version/run_tests', async (req, res) => {
+  const version = parseInt(req.params.version, 10);
+  if (isNaN(version)) { res.status(400).json({ error: { code: 'bad_request', message: 'version must be integer' } }); return; }
+  if (!toolRegistry.getTool(req.params.name, version)) {
+    res.status(404).json({ error: { code: 'not_found', message: 'Tool not found' } }); return;
+  }
+  try {
+    const result = await toolRegistry.runTests(req.params.name, version);
+    res.status(202).json({ data: result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === 'python_unavailable') {
+      res.status(503).json({ error: { code: 'python_unavailable', message: 'Python interpreter not available' } });
+    } else {
+      res.status(500).json({ error: { code: 'internal', message: msg } });
+    }
+  }
+});
+
+app.get('/api/registry/tools/:name/:version/invocations', (req, res) => {
+  const version = parseInt(req.params.version, 10);
+  if (isNaN(version)) { res.status(400).json({ error: { code: 'bad_request', message: 'version must be integer' } }); return; }
+  if (!toolRegistry.getTool(req.params.name, version)) {
+    res.status(404).json({ error: { code: 'not_found', message: 'Tool not found' } }); return;
+  }
+  res.json({ data: { toolName: req.params.name, version, invocations: [], note: 'invocation logging not yet enabled' } });
+});
+
+app.get('/api/registry/tools/:name/:version', (req, res) => {
+  const version = parseInt(req.params.version, 10);
+  if (isNaN(version)) { res.status(400).json({ error: { code: 'bad_request', message: 'version must be integer' } }); return; }
+  const record = toolRegistry.getTool(req.params.name, version);
+  if (!record) { res.status(404).json({ error: { code: 'not_found', message: 'Tool not found' } }); return; }
+  res.json({ data: record });
+});
+
+app.get('/api/registry/schemas', (_req, res) => {
+  const schemas = toolRegistry.listSchemas();
+  res.json({ data: { schemas, total: schemas.length } });
+});
+
+app.get('/api/registry/schemas/:name', (req, res) => {
+  const schema = toolRegistry.getSchema(req.params.name);
+  if (!schema) { res.status(404).json({ error: { code: 'not_found', message: 'Schema not found' } }); return; }
+  res.json({ data: schema });
+});
+
+app.get('/api/registry/converters', (_req, res) => {
+  const converters = toolRegistry.listConverters();
+  res.json({ data: { converters, total: converters.length } });
+});
+
+app.get('/api/registry/converters/:source/:target', (req, res) => {
+  const converter = toolRegistry.getConverter(req.params.source, req.params.target);
+  if (!converter) { res.status(404).json({ error: { code: 'not_found', message: 'Converter not found' } }); return; }
+  res.json({ data: converter });
+});
+
+app.get('/api/registry/categories', (_req, res) => {
+  const categories = toolRegistry.listCategories();
+  res.json({ data: { categories, total: categories.length } });
+});
+
+app.get('/api/registry/search', (req, res) => {
+  const q = (req.query.q as string) ?? '';
+  if (q.length < 2) {
+    res.status(400).json({ error: { code: 'bad_request', message: 'q must be at least 2 characters' } }); return;
+  }
+  const tools = toolRegistry.searchTools(q);
+  const results = tools.map(t => ({
+    name: t.name, version: t.version, description: t.description,
+    category: t.category, tags: t.tags,
+    matchedFields: ([
+      t.name.includes(q) ? 'name' : null,
+      t.description?.includes(q) ? 'description' : null,
+      t.tags.some(tag => tag.includes(q)) ? 'tags' : null,
+    ].filter(Boolean) as ('name' | 'description' | 'tags')[]),
+  }));
+  res.json({ data: { query: q, results, total: results.length } });
 });
 
 createWebSocketServer(server, registry, bootstrap, presetRepo, workflowRepo, projectRoot, toolRegistry);

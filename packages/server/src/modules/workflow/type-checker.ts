@@ -105,6 +105,11 @@ function parseInputSourceExpr(value: unknown): InputSource {
 
 // ---------- Schema name comparison ----------
 
+/**
+ * Option B (spec §8, Task 19): re-parse the port schema string at check time
+ * when it contains '[', rather than storing parsedTypeExpr in ResolvedPort (Option A).
+ * This avoids DB schema changes and keeps the type checker self-contained.
+ */
 function parsePortSchema(schemaName: string): TypeExpr | undefined {
   if (schemaName.includes('[')) {
     try { return parseTypeExpr(schemaName); } catch { return undefined; }
@@ -112,6 +117,11 @@ function parsePortSchema(schemaName: string): TypeExpr | undefined {
   return undefined;
 }
 
+/**
+ * Check whether sourceSchema is assignment-compatible with targetSchema.
+ * For parametrized types (e.g. List[Integer]), uses typeExprEqual for structural comparison.
+ * For named types (e.g. NumpyArray, Float), uses string equality.
+ */
 function schemasCompatible(
   sourceSchemaName: string,
   targetSchemaName: string,

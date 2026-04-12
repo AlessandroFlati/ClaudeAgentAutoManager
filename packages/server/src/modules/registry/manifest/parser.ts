@@ -1,5 +1,6 @@
 import { parse as parseYaml } from 'yaml';
 import type { ToolManifest, ToolPortSpec, Stability, CostClass } from '../types.js';
+import { parseTypeExpr, ParseError } from '../../workflow/type-parser.js';
 
 export class ManifestParseError extends Error {
   constructor(message: string, public readonly path?: string) {
@@ -49,7 +50,21 @@ function asPortMap(v: unknown, path: string): Record<string, ToolPortSpec> {
     if (typeof schema !== 'string') {
       throw new ManifestParseError(`${portPath}.schema is required and must be a string`, portPath);
     }
-    const port: ToolPortSpec = { schema };
+    let parsedTypeExpr: ToolPortSpec['parsedTypeExpr'] = undefined;
+    if (schema.includes('[')) {
+      try {
+        parsedTypeExpr = parseTypeExpr(schema);
+      } catch (err) {
+        if (err instanceof ParseError) {
+          throw new ManifestParseError(
+            `${portPath}.schema contains an invalid parametrized type expression: ${err.message}`,
+            portPath,
+          );
+        }
+        throw err;
+      }
+    }
+    const port: ToolPortSpec = { schema, ...(parsedTypeExpr !== undefined ? { parsedTypeExpr } : {}) };
     if ('required' in raw) {
       if (typeof raw.required !== 'boolean') {
         throw new ManifestParseError(`${portPath}.required must be a boolean`, portPath);

@@ -1,6 +1,8 @@
 // Public types for the Plurics Tool Registry.
 // See docs/superpowers/specs/2026-04-11-tool-registry-phase-1-2-design.md §7.
 
+import type { TypeExpr } from '../workflow/type-parser.js';
+
 export type ToolCaller = 'seed' | 'human' | 'agent';
 export type PortDirection = 'input' | 'output';
 export type Stability = 'experimental' | 'stable' | 'deprecated';
@@ -32,6 +34,7 @@ export interface SchemaDef {
 
 export interface ToolPortSpec {
   schema: string;
+  parsedTypeExpr?: TypeExpr;   // Set when schema string contains '['; absent for named types.
   required?: boolean;
   default?: unknown;
   description?: string;

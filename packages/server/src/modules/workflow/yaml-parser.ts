@@ -118,6 +118,9 @@ function validateToolset(nodeName: string, toolset: unknown[]): void {
   }
 }
 
+// Alias used by type-checker.ts for a stable import name.
+export type ParsedWorkflowYaml = WorkflowConfig;
+
 function detectCycles(nodes: Record<string, WorkflowNodeDef>): void {
   const inDegree = new Map<string, number>();
   const adjList = new Map<string, string[]>();

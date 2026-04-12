@@ -155,6 +155,19 @@ export interface EventLogEntry {
   event: string;
 }
 
+/** Event emitted when a converter tool is automatically inserted and invoked. */
+export interface ConverterEventLogEntry {
+  type: 'converter_inserted';
+  converterTool: string;
+  converterVersion: number;
+  upstreamNode: string;
+  upstreamPort: string;
+  downstreamNode: string;
+  downstreamPort: string;
+  convertedHandle: string;
+  durationMs: number;
+}
+
 // --- Node Snapshot (for run resume) ---
 
 export interface NodeSnapshot {

@@ -6,6 +6,7 @@ import type {
   NodeState,
   SignalFile,
   EventLogEntry,
+  ConverterEventLogEntry,
   NodeSnapshot,
   RunSnapshot,
 } from './types.js';
@@ -57,6 +58,8 @@ export class DagExecutor {
   private readonly workflowConfig: WorkflowConfig;
   readonly runId: string;
   private readonly eventLog: EventLogEntry[] = [];
+  /** Log of auto-inserted converter invocations (one entry per converter run). */
+  readonly converterEventLog: ConverterEventLogEntry[] = [];
   private startedAt: number = 0;
   private onStateChange: StateChangeCallback | null = null;
   private onComplete: WorkflowCompleteCallback | null = null;
@@ -1267,6 +1270,105 @@ export class DagExecutor {
     const rawToolInputs = (nodeDef?.toolInputs as Record<string, unknown>) ?? {};
     // Phase 2: resolve upstream value_ref references
     const toolInputs = this.resolveUpstreamRefs(rawToolInputs);
+
+    // Phase 4e: apply ConverterInsertions — invoke any registered converter tool
+    // that bridges a type mismatch on an input port of this node.
+    const nodeInputOverrides: Record<string, import('../registry/types.js').ValueRef> = {};
+    for (const insertion of (this.resolvedPlan?.converterInsertions ?? [])) {
+      if (insertion.downstreamNode !== nodeName) continue;
+
+      // Resume-path: if this converter was already run in a previous attempt, reuse the
+      // stored handle instead of invoking the converter tool again.
+      const alreadyConverted = this.converterEventLog.find(
+        (e) =>
+          e.upstreamNode === insertion.upstreamNode &&
+          e.upstreamPort === insertion.upstreamPort &&
+          e.downstreamNode === insertion.downstreamNode &&
+          e.downstreamPort === insertion.downstreamPort,
+      );
+      if (alreadyConverted) {
+        nodeInputOverrides[insertion.downstreamPort] = {
+          _type: 'value_ref',
+          _handle: alreadyConverted.convertedHandle,
+          _schema: insertion.converterTool,
+        };
+        continue;
+      }
+
+      // Find the upstream handle from the upstream node's signal outputs.
+      const upstreamNode = this.nodes.get(insertion.upstreamNode);
+      const upstreamPortEntry = upstreamNode?.signal?.outputs?.find(
+        (o) => o.path.endsWith(`/${insertion.upstreamPort}`) || o.path === insertion.upstreamPort,
+      );
+      const upstreamHandle = (upstreamPortEntry as Record<string, unknown> | undefined)?.[
+        'value_ref'
+      ] as string | undefined;
+
+      if (!upstreamHandle) {
+        throw new Error(
+          `Converter ${insertion.converterTool}: upstream handle for ` +
+            `${insertion.upstreamNode}.${insertion.upstreamPort} not found`,
+        );
+      }
+
+      const upstreamSchema = (upstreamPortEntry as Record<string, unknown>)['schema'] as
+        | string
+        | undefined;
+      const upstreamRef: import('../registry/types.js').ValueRef = {
+        _type: 'value_ref',
+        _handle: upstreamHandle,
+        _schema: upstreamSchema ?? insertion.converterTool,
+      };
+
+      const converterStart = Date.now();
+      const converterResult = await this.registryClient.invoke(
+        {
+          toolName: insertion.converterTool,
+          version: insertion.converterVersion,
+          inputs: { source: upstreamRef },
+          callerContext: {
+            workflowRunId: this.runId,
+            nodeName: `converter(${insertion.upstreamNode}→${insertion.downstreamNode})`,
+            scope: null,
+          },
+        },
+        this.valueStore,
+      );
+      const converterDurationMs = Date.now() - converterStart;
+
+      if (!converterResult.success) {
+        throw new Error(
+          `Converter ${insertion.converterTool} failed: ${converterResult.error.message}`,
+        );
+      }
+
+      const convertedRef = converterResult.outputs['target'] as
+        | import('../registry/types.js').ValueRef
+        | undefined;
+      if (!convertedRef || convertedRef._type !== 'value_ref') {
+        throw new Error(
+          `Converter ${insertion.converterTool} did not return a value_ref for port 'target'`,
+        );
+      }
+
+      nodeInputOverrides[insertion.downstreamPort] = convertedRef;
+      this.converterEventLog.push({
+        type: 'converter_inserted',
+        converterTool: insertion.converterTool,
+        converterVersion: insertion.converterVersion,
+        upstreamNode: insertion.upstreamNode,
+        upstreamPort: insertion.upstreamPort,
+        downstreamNode: insertion.downstreamNode,
+        downstreamPort: insertion.downstreamPort,
+        convertedHandle: convertedRef._handle,
+        durationMs: converterDurationMs,
+      });
+    }
+
+    // Apply any converter overrides on top of the resolved inputs.
+    for (const [port, ref] of Object.entries(nodeInputOverrides)) {
+      toolInputs[port] = ref;
+    }
 
     let invocationResult;
     try {

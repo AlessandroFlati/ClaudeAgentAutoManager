@@ -33,3 +33,4 @@ packages/server/UsersalessPycharmProjectsClaudeAgentAutoManager/
 # Editor
 .vscode/
 .claude/
+__pycache__/

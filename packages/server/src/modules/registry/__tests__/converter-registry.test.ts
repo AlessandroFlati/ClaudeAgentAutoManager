@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { RegistryClient } from '../registry-client.js';
+import { loadSeedTools } from '../seeds/loader.js';
 
 // --- helpers ---
 function tempDir() {
@@ -236,5 +237,46 @@ metadata:
     if (result.success) return;
     const msgs = result.errors.map((e) => e.message).join(' ');
     expect(msgs).toMatch(/source_schema.*NumpyArray/);
+  });
+});
+
+describe('converter registry — seed-loaded integration', () => {
+  let dir: string;
+  let client: RegistryClient;
+
+  beforeEach(async () => {
+    dir = tempDir();
+    client = new RegistryClient({ rootDir: dir });
+    await client.initialize();
+    await loadSeedTools(client);
+  });
+
+  afterEach(() => {
+    client.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('findConverter returns convert.DataFrame_to_NumpyArray after seed loading', () => {
+    const rec = client.findConverter('DataFrame', 'NumpyArray');
+    expect(rec).not.toBeNull();
+    expect(rec!.toolName).toBe('convert.DataFrame_to_NumpyArray');
+    expect(rec!.sourceSchema).toBe('DataFrame');
+    expect(rec!.targetSchema).toBe('NumpyArray');
+  });
+
+  it('findConverter returns convert.NumpyArray_to_DataFrame after seed loading', () => {
+    const rec = client.findConverter('NumpyArray', 'DataFrame');
+    expect(rec).not.toBeNull();
+    expect(rec!.toolName).toBe('convert.NumpyArray_to_DataFrame');
+    expect(rec!.sourceSchema).toBe('NumpyArray');
+    expect(rec!.targetSchema).toBe('DataFrame');
+  });
+
+  it('findConverter returns convert.OhlcFrame_to_ReturnSeries after seed loading', () => {
+    const rec = client.findConverter('OhlcFrame', 'ReturnSeries');
+    expect(rec).not.toBeNull();
+    expect(rec!.toolName).toBe('convert.OhlcFrame_to_ReturnSeries');
+    expect(rec!.sourceSchema).toBe('OhlcFrame');
+    expect(rec!.targetSchema).toBe('ReturnSeries');
   });
 });

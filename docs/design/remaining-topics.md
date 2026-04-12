@@ -103,7 +103,7 @@ Places where two design documents describe the same concept differently, or wher
 
 - **`workflow-engine.md` and `node-runtimes.md`** specify `kind: tool` nodes with a `tool: name` field and an `inputs:` block mapping port names to literal values or upstream references (`${node.outputs.port}`).
 - **Current implementation** has `kind: tool` parsed by the YAML parser and dispatched by the DAG executor, but tool nodes are rare in practice. The five existing workflows use only `kind: reasoning` nodes. No real workflow exercises the `kind: tool` path end-to-end with upstream value references.
-- **Impact:** The tool-node dispatch path is implemented but under-exercised. The type checker validates tool nodes at parse time, but the DAG executor's `resolveUpstreamRefs` for tool node inputs has only been tested with one integration test.
+- **Impact:** This is not a cross-document inconsistency — both docs agree on the syntax. The gap is that the `kind: tool` path is implemented but under-exercised in real workflows. All five existing workflows use only `kind: reasoning` nodes. The tool-node dispatch path should be stressed when `sequence-explorer` or `math-discovery` are built, as that will surface any integration issues. The DAG executor's `resolveUpstreamRefs` for tool node inputs has only been tested with one integration test.
 
 ### 3.2 Signal Schema Evolution
 
@@ -131,13 +131,17 @@ Places where two design documents describe the same concept differently, or wher
 
 Implementation choices made during development that are not recorded in any design document but are load-bearing for the codebase's behavior.
 
-### 4.1 CJS/ESM Compatibility via `__dirname`
+**Note:** Items 4.4 (signal files) and 4.5 (pickle transport) from the original version of this document were removed because they ARE documented in `persistence.md` §4 and `tool-registry.md` §9.2 / `node-runtimes.md` §5 respectively. They were incorrectly classified as undocumented.
+
+### 4.1 Build System: CJS/ESM Compatibility
 
 **Decision:** All TypeScript source files use `__dirname` (a CommonJS global) instead of `import.meta.url` (an ESM construct) for path resolution.
 
 **Rationale:** The `packages/server/package.json` does not declare `"type": "module"`, so `tsc` compiles to CommonJS. `import.meta.url` is invalid in CJS output and causes `tsc --noEmit` errors. However, vitest (the test runner) uses `tsx`/esbuild which compiles as ESM and provides a `__dirname` shim. Using `__dirname` satisfies both the build tool (tsc, CJS) and the test runner (vitest, ESM-shimmed).
 
 **Impact:** If `"type": "module"` is ever added to `package.json`, `__dirname` will need to be replaced with `import.meta.url` throughout (or a polyfill). This is the reverse of the typical ESM migration path.
+
+This is an implementation detail that belongs in a future `docs/development/build-system.md` guide, not in the architectural design documents. Tracked as backlog.
 
 ### 4.2 Python Interpreter Probing
 
@@ -155,29 +159,15 @@ Implementation choices made during development that are not recorded in any desi
 
 **Impact:** The synchronous API blocks the Node.js event loop during queries. For a single-user local server with tiny databases (hundreds of rows), this is undetectable. If the registry grows to thousands of tools or serves concurrent requests, the sync API could become a bottleneck.
 
-### 4.4 Signal Files as Source of Truth
-
-**Decision:** Node completion signals are written as JSON files to `{runDir}/signals/{signalId}.done.json`. The filesystem is the source of truth for run state; the SQLite database is a cache/index.
-
-**Rationale:** File-based signals are inspectable with standard tools (`cat`, `jq`), survive database corruption, and make resume trivial (re-scan the signals directory). The database accelerates queries but can be reconstructed from the files.
-
-**Impact:** Signal files accumulate in the run directory. A long-running workflow with many scoped nodes could produce thousands of signal files. No cleanup or archival mechanism exists within a run.
-
-### 4.5 Pickle as Structured Value Transport
-
-**Decision:** Structured values (NumpyArray, DataFrame, SymbolicExpr, etc.) are serialized as Python pickle objects, base64-encoded, and wrapped in a JSON envelope for transport between the Node.js server and Python tool subprocesses.
-
-**Rationale:** Pickle is the only Python serialization format that handles arbitrary objects (trained models, SymPy expressions, sparse matrices) without requiring per-type serializers. JSON cannot represent these; Arrow/Parquet are too narrow; Protocol Buffers would require schema definitions for every type.
-
-**Impact:** Pickle is inherently insecure against untrusted data (arbitrary code execution on deserialization). The threat model assumes tools are trusted (authored by the user or from seed). If tools from untrusted sources enter the registry, pickle deserialization becomes a security risk. Pickle also ties the registry to CPython (other Python implementations may not pickle-compatible).
-
-### 4.6 Run-Level ValueStore as In-Memory Map
+### 4.4 Run-Level ValueStore as In-Memory Map
 
 **Decision:** The value store holds structured values in a Node.js `Map<string, StoredValue>` in the server process's memory. Values are flushed to disk (`runs/{runId}/values/{handle}.json`) on node completion and loaded on demand during resume.
 
 **Rationale:** In-memory storage avoids the latency of reading large pickle blobs from disk on every tool call within a reasoning node's loop. The flush-on-completion design ensures durability for resume without impacting hot-path performance.
 
 **Impact:** Memory consumption grows with the number of structured values produced during a run. A workflow that produces hundreds of large DataFrames could exhaust server memory. No eviction policy exists.
+
+The in-memory storage pattern is an implementation detail. A note should be added to `node-runtimes.md` §5 or `persistence.md` documenting the memory implications (no eviction, grows with run size).
 
 ---
 

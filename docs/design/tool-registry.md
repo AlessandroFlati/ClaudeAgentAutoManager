@@ -580,6 +580,30 @@ Cache entries are stored in `~/.plurics/registry/cache/` with a retention policy
 
 Cache enablement is a post-MVP feature. The initial registry implementation executes every invocation fresh; caching is added once the basic invocation flow is stable and profiling shows that caching would pay off.
 
+### 9.5 Python Interpreter Resolution
+
+The registry resolves the Python interpreter once at `initialize()` time and caches the
+result for all subsequent tool invocations. The resolution probes for available interpreters
+in a platform-dependent order:
+
+- **Unix/macOS:** `python3`, then `python`
+- **Windows:** `python`, then `py` (the standard Windows Python Launcher)
+
+The first candidate that responds successfully to `--version` is selected. On Windows,
+when the `py` launcher is selected, all subsequent subprocess invocations prepend `-3` to
+the argument list to ensure Python 3 is used (e.g., `py -3 runner.py <tool_dir> <entry_point>`).
+
+If no interpreter is found, `initialize()` completes successfully but sets an internal flag.
+Subsequent `invoke()` calls return a `python_unavailable` error immediately without attempting
+subprocess spawn. Registration and discovery continue to work without Python — only execution
+requires it.
+
+The resolved interpreter path is not persisted. Each server restart re-probes. This means
+changing the system Python between restarts is safe, but changing it during a running workflow
+could cause tools registered under one Python version to be invoked under a different one.
+The `tool_hash` drift detection mechanism (Section 9.3) does not cover Python version changes;
+this is an accepted limitation of the MVP.
+
 ## 10. Workflow Integration
 
 This section describes how workflows interact with the registry: how they declare tool dependencies, how tool nodes invoke tools, how reasoning nodes expose tools to LLMs, and how plugins propose new tools.
@@ -687,6 +711,8 @@ The initial seed set targets the following categories, with approximate counts:
 | **Optimization** | 4 | `scipy.minimize`, `scipy.curve_fit`, `scipy.root_finding`, `scipy.linprog` |
 
 Total: approximately 66 seed tools. This is enough to cover the vast majority of analysis steps that workflows will actually need, without requiring the user to register anything on day one.
+
+**Note on `stats.describe` output:** An earlier version of this document described `stats.describe` as returning a `Statistics` (dict-like) schema. The correct output schema is `stats: DataFrame` — a pandas DataFrame whose rows are the standard descriptive statistics (count, mean, std, min, quartiles, max), one column per input variable. This matches the `seed-tools.md` specification and the current implementation. The `Statistics` schema (`dict` of statistical test results) is a different schema used by hypothesis-testing tools such as `stats.t_test` and `stats.ks_test`.
 
 ### 11.2 Seed Tool Construction
 

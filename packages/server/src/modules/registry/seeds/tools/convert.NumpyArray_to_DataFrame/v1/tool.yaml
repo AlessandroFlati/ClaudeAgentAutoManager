@@ -1,0 +1,35 @@
+name: convert.NumpyArray_to_DataFrame
+version: 1
+description: |
+  Convert a NumPy array to a pandas DataFrame.
+  Integer column names are assigned by default.
+
+category: converter
+
+inputs:
+  source:
+    schema: NumpyArray
+    required: true
+    description: NumPy ndarray to convert.
+
+outputs:
+  target:
+    schema: DataFrame
+    description: pandas DataFrame with integer column names.
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires:
+    - pandas
+    - numpy
+
+tests:
+  file: tests.py
+  required: true
+
+metadata:
+  stability: stable
+  is_converter: true
+  source_schema: NumpyArray
+  target_schema: DataFrame

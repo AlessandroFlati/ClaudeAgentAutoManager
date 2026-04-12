@@ -74,4 +74,5 @@ export const SEED_TOOLS: SeedToolDef[] = [
   { name: 'scipy.curve_fit',    relPath: './tools/scipy.curve_fit/tool.yaml' },
   { name: 'scipy.root_finding', relPath: './tools/scipy.root_finding/tool.yaml' },
   { name: 'scipy.linprog',      relPath: './tools/scipy.linprog/tool.yaml' },
+  { name: 'convert.DataFrame_to_NumpyArray', relPath: './tools/convert.DataFrame_to_NumpyArray/v1/tool.yaml' },
 ];

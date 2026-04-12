@@ -1,0 +1,35 @@
+name: convert.DataFrame_to_NumpyArray
+version: 1
+description: |
+  Convert a pandas DataFrame to a NumPy array by extracting the .values attribute.
+  Discards index and column labels. Numeric DataFrames only.
+
+category: converter
+
+inputs:
+  source:
+    schema: DataFrame
+    required: true
+    description: Numeric pandas DataFrame to convert.
+
+outputs:
+  target:
+    schema: NumpyArray
+    description: NumPy ndarray with shape (rows, cols).
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires:
+    - pandas
+    - numpy
+
+tests:
+  file: tests.py
+  required: true
+
+metadata:
+  stability: stable
+  is_converter: true
+  source_schema: DataFrame
+  target_schema: NumpyArray

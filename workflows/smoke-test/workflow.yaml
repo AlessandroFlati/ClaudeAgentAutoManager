@@ -21,8 +21,9 @@ nodes:
   echo_node:
     preset: smoke/echo
     kind: reasoning
-    backend: process
-    command: ["powershell", "-NoProfile", "-Command", "Write-Output 'hello from process backend'; exit 0"]
+    backend: claude
+    model: claude-haiku-3-5
+    toolset: []
     depends_on: []
     timeout_seconds: 60
 
@@ -30,8 +31,9 @@ nodes:
   writer:
     preset: smoke/writer
     kind: reasoning
-    backend: claude-code
-    model: sonnet
+    backend: claude
+    model: claude-3-5-sonnet-20241022
+    toolset: []
     depends_on: [echo_node]
 
   # Local-llm backend — Qwen3.5 via Ollama (native API with thinking disabled)

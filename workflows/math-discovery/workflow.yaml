@@ -74,39 +74,43 @@ nodes:
   ohlc_fetch:
     preset: research/math-discovery/ohlc-fetcher
     kind: reasoning
-    backend: process
-    command: ["py", "-m", "ohlc_fetcher"]
-    working_dir: "{{WORKSPACE}}"
+    backend: claude
+    model: claude-haiku-3-5
+    toolset: []
     depends_on: []
     timeout_seconds: 900
 
   profiler:
     preset: research/math-discovery/profiler
     kind: reasoning
-    backend: claude-code
-    model: sonnet
+    backend: claude
+    model: claude-3-5-sonnet-20241022
+    toolset: []
     depends_on: [ohlc_fetch]
 
   conjecturer:
     preset: research/math-discovery/conjecturer
     kind: reasoning
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-3-opus-20250219
+    toolset: []
     depends_on: [profiler]
     max_invocations: 5  # max_rounds
 
   critic:
     preset: research/math-discovery/critic
     kind: reasoning
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-3-opus-20250219
+    toolset: []
     depends_on: [conjecturer]
 
   selector:
     preset: research/math-discovery/selector
     kind: reasoning
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-3-opus-20250219
+    toolset: []
     depends_on: [critic]
     branch:
       - condition: "selected"
@@ -120,15 +124,17 @@ nodes:
   formalizer:
     preset: research/math-discovery/formalizer
     kind: reasoning
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-3-opus-20250219
+    toolset: []
     depends_on: [selector]
 
   strategist:
     preset: research/math-discovery/strategist
     kind: reasoning
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-3-opus-20250219
+    toolset: []
     depends_on: [formalizer]
 
   prover:
@@ -154,8 +160,9 @@ nodes:
   counterexample:
     preset: research/math-discovery/counterexample
     kind: reasoning
-    backend: claude-code
-    model: sonnet
+    backend: claude
+    model: claude-3-5-sonnet-20241022
+    toolset: []
     depends_on: [prover]
     branch:
       - condition: "counterexample_found"
@@ -166,15 +173,17 @@ nodes:
   abstractor:
     preset: research/math-discovery/abstractor
     kind: reasoning
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-3-opus-20250219
+    toolset: []
     depends_on: [prover, counterexample]  # OR-dependency (handled by plugin)
 
   synthesizer:
     preset: research/math-discovery/synthesizer
     kind: reasoning
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-3-opus-20250219
+    toolset: []
     depends_on_all: [abstractor]   # Wait for all scoped abstractors
     branch:
       - condition: "findings_sufficient"
@@ -189,15 +198,16 @@ nodes:
   backtest_designer:
     preset: research/math-discovery/backtest-designer
     kind: reasoning
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-3-opus-20250219
+    toolset: []
     depends_on: [synthesizer]
 
   backtester:
     preset: research/math-discovery/backtester
     kind: reasoning
-    backend: process
-    command: ["py", "-m", "backtester"]
-    working_dir: "{{WORKSPACE}}"
+    backend: claude
+    model: claude-haiku-3-5
+    toolset: []
     depends_on: [backtest_designer]
     timeout_seconds: 1800

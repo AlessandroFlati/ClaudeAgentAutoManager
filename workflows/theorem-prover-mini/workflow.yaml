@@ -50,8 +50,9 @@ nodes:
   conjecturer:
     kind: reasoning
     preset: research/theorem-prover-mini/conjecturer
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-haiku-3-5
+    toolset: []
     depends_on: []
     branch:
       - condition: "theorems_ready"
@@ -61,15 +62,17 @@ nodes:
   formalizer:
     kind: reasoning
     preset: research/theorem-prover-mini/formalizer
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-haiku-3-5
+    toolset: []
     depends_on: [conjecturer]
 
   prover:
     kind: reasoning
     preset: research/theorem-prover-mini/prover
-    backend: claude-code
-    model: opus
+    backend: claude
+    model: claude-haiku-3-5
+    toolset: []
     depends_on: [formalizer]
     timeout_seconds: 600
     max_invocations: 4  # Initial + 3 self-corrections
@@ -77,9 +80,9 @@ nodes:
   lean_check:
     kind: reasoning
     preset: research/theorem-prover-mini/lean-checker
-    backend: process
-    command: ["lake", "build"]
-    working_dir: "{{WORKSPACE}}/lean-project"
+    backend: claude
+    model: claude-haiku-3-5
+    toolset: []
     depends_on: [prover]
     timeout_seconds: 300
     branch:
@@ -91,6 +94,7 @@ nodes:
   reporter:
     kind: reasoning
     preset: research/theorem-prover-mini/reporter
-    backend: claude-code
-    model: sonnet
+    backend: claude
+    model: claude-haiku-3-5
+    toolset: []
     depends_on: [lean_check]

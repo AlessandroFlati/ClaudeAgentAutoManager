@@ -109,7 +109,7 @@ describe('converter registry', () => {
       'NumpyArray',
       'DataFrame',
     );
-    const result = await client.register({ manifestPath, caller: 'test' });
+    const result = await client.register({ manifestPath, caller: 'human' });
     expect(result.success).toBe(true);
 
     const rec = client.findConverter('NumpyArray', 'DataFrame');
@@ -129,7 +129,7 @@ describe('converter registry', () => {
       'NumpyArray',
       'DataFrame',
     );
-    const r1 = await client.register({ manifestPath: manifestV1, caller: 'test' });
+    const r1 = await client.register({ manifestPath: manifestV1, caller: 'human' });
     expect(r1.success).toBe(true);
 
     // Register v2 (same pair, different version)
@@ -164,7 +164,7 @@ metadata:
     );
     const r2 = await client.register({
       manifestPath: path.join(dirV2, 'tool.yaml'),
-      caller: 'test',
+      caller: 'human',
     });
     expect(r2.success).toBe(true);
 
@@ -181,7 +181,7 @@ metadata:
       'NumpyArray',
       'DataFrame',
     );
-    const result = await client.register({ manifestPath, caller: 'test' });
+    const result = await client.register({ manifestPath, caller: 'human' });
     expect(result.success).toBe(true);
 
     const rec = client.findConverter('NumpyArray', 'DataFrame');
@@ -191,7 +191,7 @@ metadata:
 
   it('non-converter tool does not populate converter table', async () => {
     const manifestPath = writeNonConverterFixture(sourceDir, 'test.plain_tool');
-    const result = await client.register({ manifestPath, caller: 'test' });
+    const result = await client.register({ manifestPath, caller: 'human' });
     expect(result.success).toBe(true);
 
     // A non-converter tool should not appear in converter lookups
@@ -231,7 +231,7 @@ metadata:
     );
     const result = await client.register({
       manifestPath: path.join(dir2, 'tool.yaml'),
-      caller: 'test',
+      caller: 'human',
     });
     expect(result.success).toBe(false);
     if (result.success) return;

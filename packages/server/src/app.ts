@@ -14,6 +14,8 @@ import { resolvePluricsPath } from './modules/workflow/utils.js';
 import { RegistryClient } from './modules/registry/index.js';
 import { loadSeedTools } from './modules/registry/seeds/index.js';
 import type { ListFilters, ToolRecord, ToolStatus } from './modules/registry/types.js';
+import { activeExecutors } from './transport/websocket.js';
+import { createAndStartExecutor } from './modules/workflow/run-controller.js';
 
 const PORT = parseInt(process.env.PORT ?? '11001', 10);
 
@@ -280,6 +282,199 @@ app.get('/api/workflows/runs/:runId/findings', (req, res) => {
   }
 });
 
+// ── Run endpoints (Tasks 8-12) ───────────────────────────────────────────────
+
+// Literal paths before parameterized :runId routes
+app.post('/api/runs/start', (req, res) => {
+  const { yamlContent, workspacePath, yamlPath, inputManifest } = req.body;
+  if (!yamlContent || !workspacePath) {
+    res.status(400).json({ error: { code: 'bad_request', message: 'yamlContent and workspacePath required' } }); return;
+  }
+  try {
+    const result = createAndStartExecutor(
+      { yamlContent, workspacePath, yamlPath, inputManifest },
+      broadcastAll,
+      registry,
+      bootstrap,
+      presetRepo,
+      workflowRepo,
+      projectRoot,
+      toolRegistry,
+      activeExecutors,
+    );
+    res.status(202).json({ data: result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: { code: 'bad_request', message: msg } });
+  }
+});
+
+app.get('/api/runs/resumable', (_req, res) => {
+  const runs = workflowRepo.listResumableRuns();
+  res.json({ data: { runs: runs.map(r => ({
+    id: r.id, workflow_name: r.workflow_name, status: r.status,
+    started_at: r.started_at, node_count: r.node_count,
+    nodes_completed: r.nodes_completed, nodes_failed: r.nodes_failed,
+  })), total: runs.length } });
+});
+
+app.get('/api/runs', (req, res) => {
+  let runs = workflowRepo.listRuns();
+  if (req.query.status) runs = runs.filter(r => r.status === req.query.status);
+  if (req.query.workflow) runs = runs.filter(r => r.workflow_name === req.query.workflow);
+  const limit = parseInt((req.query.limit as string) ?? '100', 10);
+  const offset = parseInt((req.query.offset as string) ?? '0', 10);
+  const page = runs.slice(offset, offset + limit);
+  res.json({ data: { runs: page, total: runs.length } });
+});
+
+app.get('/api/runs/:runId/nodes/:nodeName', (req, res) => {
+  const run = workflowRepo.getRun(req.params.runId);
+  if (!run) { res.status(404).json({ error: { code: 'not_found', message: 'Run not found' } }); return; }
+  const metaPath = resolvePluricsPath(run.workspace_path, 'runs', req.params.runId, 'run-metadata.json');
+  try {
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    const node = (meta.nodes ?? []).find((n: Record<string, unknown>) => n.name === req.params.nodeName);
+    if (!node) { res.status(404).json({ error: { code: 'not_found', message: 'Node not found' } }); return; }
+    res.json({ data: node });
+  } catch {
+    res.status(404).json({ error: { code: 'not_found', message: 'Run metadata not available' } });
+  }
+});
+
+app.get('/api/runs/:runId/nodes', (req, res) => {
+  const run = workflowRepo.getRun(req.params.runId);
+  if (!run) { res.status(404).json({ error: { code: 'not_found', message: 'Run not found' } }); return; }
+  const metaPath = resolvePluricsPath(run.workspace_path, 'runs', req.params.runId, 'run-metadata.json');
+  try {
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    const nodes = (meta.nodes ?? []) as Array<Record<string, unknown>>;
+    res.json({ data: { runId: req.params.runId, nodes } });
+  } catch {
+    res.json({ data: { runId: req.params.runId, nodes: [] } });
+  }
+});
+
+app.get('/api/runs/:runId/signals', (req, res) => {
+  const run = workflowRepo.getRun(req.params.runId);
+  if (!run) { res.status(404).json({ error: { code: 'not_found', message: 'Run not found' } }); return; }
+  const signalsDir = resolvePluricsPath(run.workspace_path, 'runs', req.params.runId, 'signals');
+  try {
+    const files = fs.readdirSync(signalsDir).filter(f => f.endsWith('.json'));
+    const signals = files.map(f => {
+      try {
+        const raw = JSON.parse(fs.readFileSync(path.join(signalsDir, f), 'utf-8'));
+        return {
+          signalId: raw.signal_id ?? f.replace('.json', ''),
+          nodeName: raw.node_name ?? '',
+          scope: raw.scope ?? null,
+          timestamp: raw.timestamp ?? '',
+          status: raw.status ?? 'unknown',
+          outputCount: Array.isArray(raw.outputs) ? raw.outputs.length : 0,
+        };
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+    res.json({ data: { runId: req.params.runId, signals } });
+  } catch {
+    res.json({ data: { runId: req.params.runId, signals: [] } });
+  }
+});
+
+app.get('/api/runs/:runId/events', (req, res) => {
+  const run = workflowRepo.getRun(req.params.runId);
+  if (!run) { res.status(404).json({ error: { code: 'not_found', message: 'Run not found' } }); return; }
+  const events = workflowRepo.getEvents(req.params.runId);
+  res.json({ data: { runId: req.params.runId, events } });
+});
+
+app.get('/api/runs/:runId/findings', (req, res) => {
+  const run = workflowRepo.getRun(req.params.runId);
+  if (!run) { res.status(404).json({ error: { code: 'not_found', message: 'Run not found' } }); return; }
+  const findingsDir = resolvePluricsPath(run.workspace_path, 'runs', req.params.runId, 'findings');
+  try {
+    const files = fs.readdirSync(findingsDir).filter(f => f.endsWith('.md'));
+    const findings = files.map(f => {
+      const content = fs.readFileSync(path.join(findingsDir, f), 'utf-8');
+      return { findingId: f.replace('-finding.md', ''), content };
+    });
+    res.json({ data: { runId: req.params.runId, findings, total: findings.length } });
+  } catch {
+    res.json({ data: { runId: req.params.runId, findings: [], total: 0 } });
+  }
+});
+
+app.get('/api/runs/:runId', (req, res) => {
+  const run = workflowRepo.getRun(req.params.runId);
+  if (!run) { res.status(404).json({ error: { code: 'not_found', message: 'Run not found' } }); return; }
+  res.json({ data: { ...run, events: workflowRepo.getEvents(req.params.runId) } });
+});
+
+app.post('/api/runs/:runId/pause', (req, res) => {
+  const executor = activeExecutors.get(req.params.runId);
+  if (!executor) { res.status(404).json({ error: { code: 'not_found', message: 'Run not active' } }); return; }
+  executor.pause();
+  res.status(202).json({ data: { runId: req.params.runId, status: 'paused' } });
+});
+
+app.post('/api/runs/:runId/resume', (req, res) => {
+  const executor = activeExecutors.get(req.params.runId);
+  if (!executor) { res.status(404).json({ error: { code: 'not_found', message: 'Run not active' } }); return; }
+  executor.resume();
+  res.status(202).json({ data: { runId: req.params.runId, status: 'running' } });
+});
+
+app.post('/api/runs/:runId/abort', async (req, res) => {
+  const executor = activeExecutors.get(req.params.runId);
+  if (!executor) { res.status(404).json({ error: { code: 'not_found', message: 'Run not active' } }); return; }
+  await executor.abort();
+  workflowRepo.updateRunStatus(req.params.runId, 'aborted', 0, 0);
+  activeExecutors.delete(req.params.runId);
+  res.status(202).json({ data: { runId: req.params.runId, status: 'aborted' } });
+});
+
+// ── Findings endpoints (Tasks 16-17) ─────────────────────────────────────────
+
+app.get('/api/findings/search', (req, res) => {
+  const q = (req.query.q as string) ?? '';
+  if (!q) { res.status(400).json({ error: { code: 'bad_request', message: 'q parameter required' } }); return; }
+  res.json({ data: { query: q, results: [], total: 0, note: 'workflow_findings table not yet populated' } });
+});
+
+app.get('/api/findings', (_req, res) => {
+  const note = 'workflow_findings table not yet populated; findings available per-run via GET /api/runs/:runId/findings';
+  res.json({ data: { findings: [], total: 0, note } });
+});
+
+app.post('/api/findings/:findingId/promote', (req, res) => {
+  const { findingId } = req.params;
+  const { workspacePath: wsPath, runId } = req.body;
+  if (!wsPath || !runId) {
+    res.status(400).json({ error: { code: 'bad_request', message: 'workspacePath and runId required' } }); return;
+  }
+  const run = workflowRepo.getRun(runId);
+  if (!run) { res.status(404).json({ error: { code: 'not_found', message: 'Run not found' } }); return; }
+
+  const sourcePath = resolvePluricsPath(run.workspace_path, 'runs', runId, 'findings', `${findingId}-finding.md`);
+  const archiveDir = resolvePluricsPath(wsPath, 'shared', 'findings');
+  const destPath = path.join(archiveDir, `${findingId}-finding.md`);
+
+  try {
+    if (!fs.existsSync(sourcePath)) {
+      res.status(404).json({ error: { code: 'not_found', message: 'Finding file not found' } }); return;
+    }
+    if (fs.existsSync(destPath)) {
+      res.status(409).json({ error: { code: 'conflict', message: 'Finding already promoted' } }); return;
+    }
+    fs.mkdirSync(archiveDir, { recursive: true });
+    fs.copyFileSync(sourcePath, destPath);
+    res.json({ data: { findingId, promoted: true, archivePath: destPath } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'internal', message: err instanceof Error ? err.message : String(err) } });
+  }
+});
+
 // ── Registry endpoints (Tasks 4-7) ──────────────────────────────────────────
 
 app.get('/api/registry/tools', (req, res) => {
@@ -422,7 +617,14 @@ app.get('/api/registry/search', (req, res) => {
   res.json({ data: { query: q, results, total: results.length } });
 });
 
-createWebSocketServer(server, registry, bootstrap, presetRepo, workflowRepo, projectRoot, toolRegistry);
+const wss = createWebSocketServer(server, registry, bootstrap, presetRepo, workflowRepo, projectRoot, toolRegistry);
+
+function broadcastAll(msg: object): void {
+  const raw = JSON.stringify(msg);
+  wss.clients.forEach(client => {
+    if (client.readyState === 1 /* OPEN */) client.send(raw);
+  });
+}
 
 // Auto-seed presets from filesystem on startup
 const seeded = seedPresetsFromFilesystem(projectRoot, presetRepo);
@@ -449,6 +651,13 @@ if (seeded > 0) {
       for (const e of seedResult.errors) {
         console.warn(`[registry] Seed registration failed for ${e.name}: ${e.error}`);
       }
+    }
+    if (seedResult.registered > 0) {
+      broadcastAll({
+        type: 'registry:tool_registered',
+        timestamp: new Date().toISOString(),
+        payload: { toolName: '(seed batch)', toolVersion: 0, category: null, registeredBy: 'seed' },
+      });
     }
   } catch (err) {
     console.error('[registry] loadSeedTools failed:', err);

@@ -70,4 +70,8 @@ export const SEED_TOOLS: SeedToolDef[] = [
   { name: 'pandas.rolling',     relPath: './tools/pandas.rolling/tool.yaml' },
   { name: 'numpy.reshape',      relPath: './tools/numpy.reshape/tool.yaml' },
   { name: 'numpy.normalize',    relPath: './tools/numpy.normalize/tool.yaml' },
+  { name: 'scipy.minimize',     relPath: './tools/scipy.minimize/tool.yaml' },
+  { name: 'scipy.curve_fit',    relPath: './tools/scipy.curve_fit/tool.yaml' },
+  { name: 'scipy.root_finding', relPath: './tools/scipy.root_finding/tool.yaml' },
+  { name: 'scipy.linprog',      relPath: './tools/scipy.linprog/tool.yaml' },
 ];

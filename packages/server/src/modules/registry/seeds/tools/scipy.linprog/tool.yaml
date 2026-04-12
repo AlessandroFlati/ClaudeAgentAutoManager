@@ -1,0 +1,40 @@
+name: scipy.linprog
+version: 1
+description: Solve a linear programming problem (minimize c @ x subject to A_ub @ x <= b_ub) using scipy.optimize.linprog.
+category: optimization
+tags: [optimization, linear-programming, scipy, numpy]
+
+inputs:
+  c:
+    schema: NumpyArray
+    required: true
+    description: Coefficients of the linear objective function to minimize (1-D array).
+  A_ub:
+    schema: NumpyArray
+    required: true
+    description: Inequality constraint matrix (m x n). A_ub @ x <= b_ub.
+  b_ub:
+    schema: NumpyArray
+    required: true
+    description: Inequality constraint vector (1-D array of length m).
+
+outputs:
+  x:
+    schema: NumpyArray
+    description: Values of the decision variables at the solution.
+  fun:
+    schema: Float
+    description: Value of the objective function at the solution.
+  success:
+    schema: Boolean
+    description: Whether the optimization was successful.
+
+implementation:
+  language: python
+  entry_point: tool.py:run
+  requires: [numpy, scipy]
+
+metadata:
+  author: plurics-seeds
+  stability: stable
+  cost_class: medium

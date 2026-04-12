@@ -193,14 +193,99 @@ describe('OpenAICompatBackend', () => {
     expect(err.category).toBe('rate_limit');
   });
 
-  it('sendToolResults throws not_implemented in Phase 1', async () => {
-    const handle = await backendWithKey.startConversation({
-      systemPrompt: 'test',
-      toolDefinitions: [],
-      model: 'gpt-4o',
+});
+
+describe('OpenAICompatBackend — tool wire format', () => {
+  it('sends tools array in OpenAI function-calling format', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { role: 'assistant', content: 'hi', tool_calls: undefined },
+                     finish_reason: 'stop' }],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      }),
     });
-    const err = await backendWithKey.sendToolResults(handle, []).catch(e => e);
-    expect(err).toBeInstanceOf(BackendError);
-    expect(err.category).toBe('not_implemented');
+    global.fetch = fetchSpy as any;
+
+    const backend = new OpenAICompatBackend({ baseUrl: 'http://localhost:11434', apiKey: 'k', model: 'gpt-4o' });
+    const tools: import('../new-types.js').ToolDefinition[] = [{
+      name: 'statistics_mean',
+      description: 'Compute mean',
+      inputSchema: { type: 'object', properties: { x: { type: 'number' } }, required: ['x'] },
+    }];
+    const handle = await backend.startConversation({ systemPrompt: 'sys', toolDefinitions: tools, model: 'gpt-4o', maxTokens: 1024 });
+    await backend.sendMessage(handle, { content: 'go' });
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.tools).toHaveLength(1);
+    expect(body.tools[0].type).toBe('function');
+    expect(body.tools[0].function.name).toBe('statistics_mean');
+    expect(body.tools[0].function.parameters.properties.x.type).toBe('number');
+  });
+
+  it('parses tool_calls from assistant response', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            role: 'assistant',
+            content: null,
+            tool_calls: [{
+              id: 'call_001',
+              type: 'function',
+              function: { name: 'statistics_mean', arguments: '{"x": 5}' },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      }),
+    });
+    global.fetch = fetchSpy as any;
+
+    const backend = new OpenAICompatBackend({ baseUrl: 'http://localhost:11434', apiKey: 'k', model: 'gpt-4o' });
+    const handle = await backend.startConversation({ systemPrompt: 'sys', toolDefinitions: [], model: 'gpt-4o', maxTokens: 1024 });
+    const msg = await backend.sendMessage(handle, { content: 'go' });
+
+    expect(msg.toolCalls).toHaveLength(1);
+    expect(msg.toolCalls![0].toolCallId).toBe('call_001');
+    expect(msg.toolCalls![0].inputs.x).toBe(5);
+  });
+
+  it('sends tool results as role:tool messages', async () => {
+    const fetchSpy = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{
+            message: { role: 'assistant', content: null,
+              tool_calls: [{ id: 'call_001', type: 'function',
+                function: { name: 'statistics_mean', arguments: '{}' } }] },
+            finish_reason: 'tool_calls',
+          }],
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { role: 'assistant', content: 'Result is 42.' },
+                      finish_reason: 'stop' }],
+          usage: { prompt_tokens: 20, completion_tokens: 5 },
+        }),
+      });
+    global.fetch = fetchSpy as any;
+
+    const backend = new OpenAICompatBackend({ baseUrl: 'http://localhost:11434', apiKey: 'k', model: 'gpt-4o' });
+    const handle = await backend.startConversation({ systemPrompt: 'sys', toolDefinitions: [], model: 'gpt-4o', maxTokens: 1024 });
+    await backend.sendMessage(handle, { content: 'go' });
+    await backend.sendToolResults(handle, [{ toolCallId: 'call_001', content: '42' }]);
+
+    const body = JSON.parse(fetchSpy.mock.calls[1][1].body);
+    const toolMsg = body.messages.find((m: any) => m.role === 'tool');
+    expect(toolMsg).toBeDefined();
+    expect(toolMsg.tool_call_id).toBe('call_001');
+    expect(toolMsg.content).toBe('42');
   });
 });

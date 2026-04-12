@@ -5,6 +5,7 @@ import type {
   ToolDefinition,
   UserMessage,
   AssistantMessage,
+  ToolCall,
   ToolResult,
 } from './new-types.js';
 import { BackendError } from './new-types.js';
@@ -17,16 +18,28 @@ export interface OpenAICompatBackendConfig {
 }
 
 interface OpenAIMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: unknown[];
+  tool_call_id?: string;
+}
+
+interface OpenAITool {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: unknown;
+  };
 }
 
 interface ConversationState {
   systemPrompt: string;
   model: string;
   maxTokens: number;
+  tools: OpenAITool[];
   // Does not include the system message — it is injected at request time
-  turns: Array<{ role: 'user' | 'assistant'; content: string }>;
+  messages: OpenAIMessage[];
 }
 
 export class OpenAICompatBackend implements AgentBackend {
@@ -52,7 +65,15 @@ export class OpenAICompatBackend implements AgentBackend {
       systemPrompt: params.systemPrompt,
       model: params.model,
       maxTokens: params.maxTokens ?? this.config.maxTokens ?? 4096,
-      turns: [],
+      tools: params.toolDefinitions.map(def => ({
+        type: 'function' as const,
+        function: {
+          name: def.name,
+          description: def.description,
+          parameters: def.inputSchema,
+        },
+      })),
+      messages: [],
     });
     return { conversationId };
   }
@@ -63,17 +84,18 @@ export class OpenAICompatBackend implements AgentBackend {
   ): Promise<AssistantMessage> {
     const state = this.getConversationState(conversation);
 
-    state.turns.push({ role: 'user', content: userMessage.content });
+    state.messages.push({ role: 'user', content: userMessage.content });
 
     const messages: OpenAIMessage[] = [
       { role: 'system', content: state.systemPrompt },
-      ...state.turns,
+      ...state.messages,
     ];
 
-    const body = {
+    const body: Record<string, unknown> = {
       model: state.model,
       max_tokens: state.maxTokens,
       messages,
+      ...(state.tools.length > 0 && { tools: state.tools }),
     };
 
     const headers: Record<string, string> = {
@@ -90,36 +112,112 @@ export class OpenAICompatBackend implements AgentBackend {
     });
 
     if (!response.ok) {
-      state.turns.pop();
+      state.messages.pop();
       await this.throwApiError(response);
     }
 
     const data = await response.json() as {
       choices: Array<{
-        message: { content: string };
+        message: { role: string; content: string | null; tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }> };
         finish_reason: string;
       }>;
     };
 
-    const assistantText = data.choices[0].message.content;
-    state.turns.push({ role: 'assistant', content: assistantText });
+    const rawMsg = data.choices[0].message;
+    const toolCalls: ToolCall[] = (rawMsg.tool_calls ?? []).map((tc) => ({
+      toolCallId: tc.id,
+      toolName: tc.function.name,
+      inputs: JSON.parse(tc.function.arguments) as Record<string, unknown>,
+    }));
+
+    state.messages.push({
+      role: 'assistant',
+      content: rawMsg.content ?? null,
+      ...(rawMsg.tool_calls && { tool_calls: rawMsg.tool_calls }),
+    });
+
+    const assistantText = rawMsg.content ?? '';
 
     return {
       content: assistantText,
       text: assistantText,
-      toolCalls: [],
+      toolCalls,
       stopReason: data.choices[0].finish_reason,
     };
   }
 
   async sendToolResults(
-    _conversation: ConversationHandle,
-    _toolResults: ToolResult[],
+    conversation: ConversationHandle,
+    toolResults: ToolResult[],
   ): Promise<AssistantMessage> {
-    throw new BackendError(
-      'sendToolResults: not implemented in Phase 1 — tool-calling loop requires NR Phase 3',
-      'not_implemented',
-    );
+    const state = this.getConversationState(conversation);
+
+    for (const r of toolResults) {
+      state.messages.push({
+        role: 'tool',
+        tool_call_id: r.toolCallId,
+        content: r.content,
+      });
+    }
+
+    const messages: OpenAIMessage[] = [
+      { role: 'system', content: state.systemPrompt },
+      ...state.messages,
+    ];
+
+    const body: Record<string, unknown> = {
+      model: state.model,
+      max_tokens: state.maxTokens,
+      messages,
+      ...(state.tools.length > 0 && { tools: state.tools }),
+    };
+
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+    };
+    if (this.config.apiKey) {
+      headers['authorization'] = `Bearer ${this.config.apiKey}`;
+    }
+
+    const response = await fetch(`${this.config.baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      state.messages.splice(state.messages.length - toolResults.length, toolResults.length);
+      await this.throwApiError(response);
+    }
+
+    const data = await response.json() as {
+      choices: Array<{
+        message: { role: string; content: string | null; tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }> };
+        finish_reason: string;
+      }>;
+    };
+
+    const rawMsg = data.choices[0].message;
+    const toolCalls: ToolCall[] = (rawMsg.tool_calls ?? []).map((tc) => ({
+      toolCallId: tc.id,
+      toolName: tc.function.name,
+      inputs: JSON.parse(tc.function.arguments) as Record<string, unknown>,
+    }));
+
+    state.messages.push({
+      role: 'assistant',
+      content: rawMsg.content ?? null,
+      ...(rawMsg.tool_calls && { tool_calls: rawMsg.tool_calls }),
+    });
+
+    const assistantText = rawMsg.content ?? '';
+
+    return {
+      content: assistantText,
+      text: assistantText,
+      toolCalls,
+      stopReason: data.choices[0].finish_reason,
+    };
   }
 
   async closeConversation(conversation: ConversationHandle): Promise<void> {

@@ -259,3 +259,74 @@ describe('ClaudeBackend — tool wire format', () => {
     expect(msg.text).toBe('I will call a tool.');
   });
 });
+
+describe('ClaudeBackend — sendToolResults', () => {
+  it('sends tool_result user message and parses next assistant response', async () => {
+    const fetchSpy = vi.fn()
+      // First call: sendMessage returns tool_use
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          content: [
+            { type: 'tool_use', id: 'tu_001', name: 'statistics_mean', input: { values: 'v' } },
+          ],
+          stop_reason: 'tool_use',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+      })
+      // Second call: sendToolResults returns final text
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          content: [{ type: 'text', text: 'The mean is 42.' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 30, output_tokens: 10 },
+        }),
+      });
+    global.fetch = fetchSpy as any;
+
+    const backend = new ClaudeBackend({ apiKey: 'test-key' });
+    const handle = await backend.startConversation('sys', [], 'claude-3-5-haiku-20241022', 1024);
+    await backend.sendMessage(handle, 'run it');
+
+    const result = await backend.sendToolResults(handle, [
+      { toolCallId: 'tu_001', content: '{"result": 42}', isError: false },
+    ]);
+
+    // Verify the second fetch included tool_result content
+    const secondBody = JSON.parse(fetchSpy.mock.calls[1][1].body);
+    const toolResultMsg = secondBody.messages.find((m: any) => m.role === 'user' &&
+      Array.isArray(m.content) && m.content[0]?.type === 'tool_result');
+    expect(toolResultMsg).toBeDefined();
+    expect(toolResultMsg.content[0].tool_use_id).toBe('tu_001');
+    expect(toolResultMsg.content[0].content).toBe('{"result": 42}');
+
+    expect(result.text).toBe('The mean is 42.');
+    expect(result.toolCalls).toBeUndefined();
+  });
+
+  it('marks isError=true in tool_result block', async () => {
+    const fetchSpy = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          content: [{ type: 'text', text: 'ok' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 5, output_tokens: 5 },
+        }),
+      });
+    global.fetch = fetchSpy as any;
+
+    const backend = new ClaudeBackend({ apiKey: 'test-key' });
+    const handle = await backend.startConversation('sys', [], 'claude-3-5-haiku-20241022', 1024);
+
+    await backend.sendToolResults(handle, [
+      { toolCallId: 'tu_err', content: 'Tool exploded', isError: true },
+    ]);
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const userMsgs = body.messages.filter((m: any) => m.role === 'user');
+    const lastUser = userMsgs[userMsgs.length - 1];
+    expect(lastUser.content[0].is_error).toBe(true);
+  });
+});

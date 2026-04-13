@@ -1,5 +1,6 @@
 name: test.slow
 version: 1
+change_type: net_new
 description: Sleeps for N seconds.
 inputs:
   seconds:

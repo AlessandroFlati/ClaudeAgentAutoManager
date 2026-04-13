@@ -1,5 +1,6 @@
 name: test.crash
 version: 1
+change_type: net_new
 description: Exits with a non-standard code.
 inputs: {}
 outputs:

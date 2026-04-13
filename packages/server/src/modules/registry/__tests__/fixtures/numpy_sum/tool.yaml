@@ -1,5 +1,6 @@
 name: test.numpy_sum
 version: 1
+change_type: net_new
 description: Sum a JSON list of numbers and return both the array and the sum.
 category: testing
 inputs:

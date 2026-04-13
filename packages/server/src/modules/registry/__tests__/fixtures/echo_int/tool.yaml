@@ -1,5 +1,6 @@
 name: test.echo_int
 version: 1
+change_type: net_new
 description: Echo an integer unchanged.
 category: testing
 inputs:

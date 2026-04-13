@@ -1,5 +1,6 @@
 name: test.always_fails
 version: 1
+change_type: net_new
 description: Always raises.
 inputs:
   message:

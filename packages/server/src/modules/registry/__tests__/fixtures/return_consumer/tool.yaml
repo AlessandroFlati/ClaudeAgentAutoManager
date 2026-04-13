@@ -1,5 +1,6 @@
 name: test.return_consumer
 version: 1
+change_type: net_new
 description: Accept a ReturnSeries and compute its mean. Used for converter insertion testing.
 category: testing
 inputs:

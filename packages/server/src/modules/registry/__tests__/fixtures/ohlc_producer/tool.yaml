@@ -1,5 +1,6 @@
 name: test.ohlc_producer
 version: 1
+change_type: net_new
 description: Produce a minimal OHLC DataFrame for testing converter insertion.
 category: testing
 inputs: {}

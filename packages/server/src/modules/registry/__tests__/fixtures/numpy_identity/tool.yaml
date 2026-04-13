@@ -1,5 +1,6 @@
 name: test.numpy_identity
 version: 1
+change_type: net_new
 description: Pass a NumpyArray through unchanged. Used for value-store round-trip testing.
 category: testing
 inputs:

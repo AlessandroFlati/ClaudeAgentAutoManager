@@ -1,5 +1,6 @@
 name: test.bad_output
 version: 1
+change_type: net_new
 description: Returns a dict missing a declared output.
 inputs: {}
 outputs:

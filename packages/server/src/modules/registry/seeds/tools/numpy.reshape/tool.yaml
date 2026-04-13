@@ -1,5 +1,6 @@
 name: numpy.reshape
 version: 1
+change_type: net_new
 description: Reshape a NumpyArray to a specified shape.
 category: data_transformation
 tags: [numpy, reshape, array]

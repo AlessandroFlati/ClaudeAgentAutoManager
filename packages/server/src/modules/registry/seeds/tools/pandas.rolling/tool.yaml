@@ -1,5 +1,6 @@
 name: pandas.rolling
 version: 1
+change_type: net_new
 description: Compute a rolling-window aggregation over a DataFrame.
 category: data_transformation
 tags: [pandas, rolling, window, dataframe]

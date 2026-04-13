@@ -1,5 +1,6 @@
 name: plot.histogram
 version: 1
+change_type: net_new
 description: Render a histogram of numeric values and save it as a PNG file.
 category: plotting
 inputs:

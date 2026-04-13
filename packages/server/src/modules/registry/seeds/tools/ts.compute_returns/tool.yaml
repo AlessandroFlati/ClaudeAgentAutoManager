@@ -1,5 +1,6 @@
 name: ts.compute_returns
 version: 1
+change_type: net_new
 description: Compute log or simple returns from a price series.
 category: time_series
 inputs:

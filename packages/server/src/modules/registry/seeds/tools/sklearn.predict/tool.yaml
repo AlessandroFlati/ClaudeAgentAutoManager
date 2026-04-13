@@ -1,5 +1,6 @@
 name: sklearn.predict
 version: 1
+change_type: net_new
 description: Run inference with a fitted scikit-learn regression model and return predictions.
 category: regression
 inputs:

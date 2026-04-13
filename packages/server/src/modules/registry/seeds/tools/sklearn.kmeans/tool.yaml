@@ -1,5 +1,6 @@
 name: sklearn.kmeans
 version: 1
+change_type: net_new
 description: K-means clustering of a numeric matrix.
 category: clustering
 inputs:

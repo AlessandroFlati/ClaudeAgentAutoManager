@@ -1,5 +1,6 @@
 name: stats.ks_test
 version: 1
+change_type: net_new
 description: Kolmogorov-Smirnov test against a reference distribution.
 category: hypothesis_testing
 inputs:

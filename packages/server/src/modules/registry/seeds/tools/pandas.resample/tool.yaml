@@ -1,5 +1,6 @@
 name: pandas.resample
 version: 1
+change_type: net_new
 description: Resample a time-indexed DataFrame to a new frequency.
 category: data_transformation
 inputs:

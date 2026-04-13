@@ -1,5 +1,6 @@
 name: numpy.normalize
 version: 1
+change_type: net_new
 description: Normalize a NumpyArray using a specified vector norm.
 category: data_transformation
 tags: [numpy, normalize, norm, array]

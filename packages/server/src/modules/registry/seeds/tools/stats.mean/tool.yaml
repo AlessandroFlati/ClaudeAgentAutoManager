@@ -1,5 +1,6 @@
 name: stats.mean
 version: 1
+change_type: net_new
 description: Compute the arithmetic mean of a numeric array or series.
 category: descriptive_stats
 inputs:

@@ -1,5 +1,6 @@
 name: sklearn.ridge_regression
 version: 1
+change_type: net_new
 description: L2-regularized linear regression.
 category: regression
 inputs:

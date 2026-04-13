@@ -1,5 +1,6 @@
 name: pandas.save_parquet
 version: 1
+change_type: net_new
 description: Write a DataFrame to a Parquet file.
 category: data_io
 inputs:

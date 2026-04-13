@@ -1,5 +1,6 @@
 name: pandas.pivot
 version: 1
+change_type: net_new
 description: Create a pivot table from a DataFrame.
 category: data_transformation
 tags: [pandas, pivot, reshape, dataframe]

@@ -1,5 +1,6 @@
 name: scipy.minimize
 version: 1
+change_type: net_new
 description: Minimize a scalar function of one or more variables.
 category: optimization
 inputs:

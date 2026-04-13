@@ -1,5 +1,6 @@
 name: sklearn.ica
 version: 1
+change_type: net_new
 description: Independent Component Analysis on a numeric matrix.
 category: decomposition
 inputs:

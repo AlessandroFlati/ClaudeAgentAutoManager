@@ -1,5 +1,6 @@
 name: plot.heatmap
 version: 1
+change_type: net_new
 description: Render a heatmap of a 2-D matrix using seaborn and save it as a PNG file.
 category: plotting
 inputs:

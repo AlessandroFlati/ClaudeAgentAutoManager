@@ -1,5 +1,6 @@
 name: pandas.load_parquet
 version: 1
+change_type: net_new
 description: Load a Parquet file into a DataFrame.
 category: data_io
 inputs:

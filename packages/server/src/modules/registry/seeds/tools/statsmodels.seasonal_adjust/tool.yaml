@@ -1,5 +1,6 @@
 name: statsmodels.seasonal_adjust
 version: 1
+change_type: net_new
 description: Remove the seasonal component from a time series using statsmodels seasonal decomposition.
 category: time_series
 tags: [seasonal-adjustment, deseasonalise, statsmodels, numpy]

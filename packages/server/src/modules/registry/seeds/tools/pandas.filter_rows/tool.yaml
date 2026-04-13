@@ -1,5 +1,6 @@
 name: pandas.filter_rows
 version: 1
+change_type: net_new
 description: Filter rows of a DataFrame using a query expression.
 category: data_transformation
 inputs:

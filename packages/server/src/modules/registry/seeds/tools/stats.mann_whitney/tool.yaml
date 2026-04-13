@@ -1,5 +1,6 @@
 name: stats.mann_whitney
 version: 1
+change_type: net_new
 description: Mann-Whitney U test, a non-parametric alternative to the t-test.
 category: hypothesis_testing
 inputs:

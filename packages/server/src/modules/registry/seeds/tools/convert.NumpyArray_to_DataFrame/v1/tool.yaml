@@ -1,5 +1,6 @@
 name: convert.NumpyArray_to_DataFrame
 version: 1
+change_type: net_new
 description: |
   Convert a NumPy array to a pandas DataFrame.
   Integer column names are assigned by default.

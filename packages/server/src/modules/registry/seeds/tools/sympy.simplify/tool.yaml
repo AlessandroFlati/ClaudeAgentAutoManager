@@ -1,5 +1,6 @@
 name: sympy.simplify
 version: 1
+change_type: net_new
 description: Simplify a symbolic expression using SymPy's general heuristics.
 category: symbolic_math
 inputs:

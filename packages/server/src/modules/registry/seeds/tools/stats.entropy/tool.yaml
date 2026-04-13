@@ -1,5 +1,6 @@
 name: stats.entropy
 version: 1
+change_type: net_new
 description: Compute the Shannon entropy of a probability distribution using scipy.stats.entropy.
 category: information_theory
 inputs:

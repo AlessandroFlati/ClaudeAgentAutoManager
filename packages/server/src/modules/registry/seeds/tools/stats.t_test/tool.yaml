@@ -1,5 +1,6 @@
 name: stats.t_test
 version: 1
+change_type: net_new
 description: Two-sample t-test for the means of two independent samples.
 category: hypothesis_testing
 inputs:

@@ -1,5 +1,6 @@
 name: ta.compute_rsi
 version: 1
+change_type: net_new
 description: Compute the Relative Strength Index (RSI) for a price series using a rolling window.
 category: time_series
 tags: [rsi, technical-analysis, ta, numpy]

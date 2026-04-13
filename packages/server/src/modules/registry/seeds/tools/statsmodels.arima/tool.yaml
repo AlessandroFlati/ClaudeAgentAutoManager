@@ -1,5 +1,6 @@
 name: statsmodels.arima
 version: 1
+change_type: net_new
 description: Fit an ARIMA model to a time series.
 category: time_series
 inputs:

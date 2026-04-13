@@ -1,5 +1,6 @@
 name: stats.autocorrelation
 version: 1
+change_type: net_new
 description: Compute the autocorrelation function of a time series up to a given lag.
 category: descriptive_stats
 inputs:

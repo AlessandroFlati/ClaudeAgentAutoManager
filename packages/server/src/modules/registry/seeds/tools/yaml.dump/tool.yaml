@@ -1,5 +1,6 @@
 name: yaml.dump
 version: 1
+change_type: net_new
 category: data_io
 description: Serialize a JSON-compatible object to a YAML file on disk.
 requires: []

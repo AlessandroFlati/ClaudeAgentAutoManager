@@ -1,5 +1,6 @@
 name: sympy.differentiate
 version: 1
+change_type: net_new
 description: Compute the derivative of a symbolic expression with respect to a variable.
 category: symbolic_math
 tags: [sympy, symbolic, differentiation, calculus]

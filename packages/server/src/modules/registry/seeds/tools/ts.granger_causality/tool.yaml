@@ -1,5 +1,6 @@
 name: ts.granger_causality
 version: 1
+change_type: net_new
 description: Granger causality test between two time series.
 category: time_series
 inputs:

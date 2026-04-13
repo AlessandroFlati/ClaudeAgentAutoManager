@@ -1,5 +1,6 @@
 name: sklearn.gaussian_mixture
 version: 1
+change_type: net_new
 description: Gaussian Mixture Model clustering.
 category: clustering
 inputs:

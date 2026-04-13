@@ -1,5 +1,6 @@
 name: sklearn.logistic_regression
 version: 1
+change_type: net_new
 description: Fit a logistic regression classifier using scikit-learn and return coefficients, intercept, and accuracy.
 category: regression
 inputs:

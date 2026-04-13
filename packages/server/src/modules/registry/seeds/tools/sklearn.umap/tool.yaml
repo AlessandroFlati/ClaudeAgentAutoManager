@@ -1,5 +1,6 @@
 name: sklearn.umap
 version: 1
+change_type: net_new
 description: UMAP dimensionality reduction (uses umap-learn, sklearn-compatible API).
 category: decomposition
 tags: [umap, dimensionality-reduction, manifold, umap-learn, numpy]

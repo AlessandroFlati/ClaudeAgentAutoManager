@@ -1,5 +1,6 @@
 name: yaml.load
 version: 1
+change_type: net_new
 category: data_io
 description: Load a YAML file from disk and return its contents as a JSON-compatible object.
 requires: []

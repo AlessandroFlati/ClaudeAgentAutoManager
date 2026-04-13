@@ -12,6 +12,7 @@
     "chokidar": "^5.0.0",
     "express": "^4.21.0",
     "micromatch": "^4.0.8",
+    "minimatch": "^9.0.9",
     "uuid": "^10.0.0",
     "ws": "^8.18.0",
     "yaml": "^2.8.3"

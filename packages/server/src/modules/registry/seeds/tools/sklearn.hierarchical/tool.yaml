@@ -1,5 +1,6 @@
 name: sklearn.hierarchical
 version: 1
+change_type: net_new
 description: Hierarchical clustering — agglomerative clustering of NumpyArray data.
 category: clustering
 tags: [hierarchical, agglomerative, clustering, scikit-learn, numpy]

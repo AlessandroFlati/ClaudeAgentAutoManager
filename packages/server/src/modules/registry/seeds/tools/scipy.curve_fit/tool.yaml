@@ -1,5 +1,6 @@
 name: scipy.curve_fit
 version: 1
+change_type: net_new
 description: Fit a parameterized function to data.
 category: optimization
 inputs:

@@ -1,5 +1,6 @@
 name: sympy.factor
 version: 1
+change_type: net_new
 description: Factor a symbolic polynomial expression using SymPy.
 category: symbolic_math
 tags: [sympy, symbolic, factor, algebra, polynomial]

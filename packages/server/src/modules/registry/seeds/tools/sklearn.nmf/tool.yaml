@@ -1,5 +1,6 @@
 name: sklearn.nmf
 version: 1
+change_type: net_new
 description: Non-negative Matrix Factorization.
 category: decomposition
 inputs:

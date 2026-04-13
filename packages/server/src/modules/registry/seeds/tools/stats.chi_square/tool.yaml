@@ -1,5 +1,6 @@
 name: stats.chi_square
 version: 1
+change_type: net_new
 description: Perform a chi-square goodness-of-fit test on observed frequencies.
 category: hypothesis_testing
 inputs:

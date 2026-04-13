@@ -1,5 +1,6 @@
 name: statsmodels.glm
 version: 1
+change_type: net_new
 description: Generalized linear model with configurable link function and family.
 category: regression
 inputs:

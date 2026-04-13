@@ -1,5 +1,6 @@
 name: pandas.load_csv
 version: 1
+change_type: net_new
 description: Load a CSV file into a DataFrame, with optional column type hints.
 category: data_io
 inputs:

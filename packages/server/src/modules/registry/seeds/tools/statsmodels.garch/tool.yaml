@@ -1,5 +1,6 @@
 name: statsmodels.garch
 version: 1
+change_type: net_new
 description: Fit a GARCH model to a return series.
 category: time_series
 inputs:

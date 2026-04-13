@@ -1,5 +1,6 @@
 name: sklearn.pca
 version: 1
+change_type: net_new
 description: Principal Component Analysis on a numeric matrix.
 category: decomposition
 inputs:

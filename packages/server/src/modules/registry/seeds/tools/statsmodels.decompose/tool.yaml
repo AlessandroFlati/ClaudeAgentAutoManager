@@ -1,5 +1,6 @@
 name: statsmodels.decompose
 version: 1
+change_type: net_new
 description: Decompose a time series into trend, seasonal, and residual components.
 category: time_series
 inputs:

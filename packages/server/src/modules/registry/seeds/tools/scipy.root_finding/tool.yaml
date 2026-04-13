@@ -1,5 +1,6 @@
 name: scipy.root_finding
 version: 1
+change_type: net_new
 description: Find a root of a scalar function in a bracketing interval.
 category: optimization
 inputs:

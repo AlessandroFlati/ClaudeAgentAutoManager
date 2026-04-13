@@ -1,5 +1,6 @@
 name: stats.ljung_box
 version: 1
+change_type: net_new
 description: Perform the Ljung-Box test for autocorrelation in residuals.
 category: hypothesis_testing
 inputs:

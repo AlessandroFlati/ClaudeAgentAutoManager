@@ -1,5 +1,6 @@
 name: sympy.limit
 version: 1
+change_type: net_new
 description: Compute the limit of a symbolic expression as a variable approaches a point.
 category: symbolic_math
 tags: [sympy, symbolic, limit, calculus]

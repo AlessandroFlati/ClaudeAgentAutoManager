@@ -1,5 +1,6 @@
 name: sklearn.silhouette_score
 version: 1
+change_type: net_new
 description: Compute the mean silhouette coefficient for a clustering result using sklearn.metrics.silhouette_score.
 category: clustering
 inputs:

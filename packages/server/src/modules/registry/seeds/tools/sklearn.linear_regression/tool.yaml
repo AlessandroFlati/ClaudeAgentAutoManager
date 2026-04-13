@@ -1,5 +1,6 @@
 name: sklearn.linear_regression
 version: 1
+change_type: net_new
 description: Ordinary least squares linear regression.
 category: regression
 inputs:

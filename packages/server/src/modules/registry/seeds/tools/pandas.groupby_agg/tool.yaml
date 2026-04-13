@@ -1,5 +1,6 @@
 name: pandas.groupby_agg
 version: 1
+change_type: net_new
 description: Group a DataFrame by one or more columns and aggregate.
 category: data_transformation
 inputs:

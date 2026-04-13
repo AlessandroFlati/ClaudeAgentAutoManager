@@ -1,5 +1,6 @@
 name: stats.quantile
 version: 1
+change_type: net_new
 description: Compute a quantile of a list of numbers.
 category: descriptive_stats
 inputs:

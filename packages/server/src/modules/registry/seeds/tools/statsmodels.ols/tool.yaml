@@ -1,5 +1,6 @@
 name: statsmodels.ols
 version: 1
+change_type: net_new
 description: Ordinary least squares regression with full statistical diagnostics.
 category: regression
 inputs:

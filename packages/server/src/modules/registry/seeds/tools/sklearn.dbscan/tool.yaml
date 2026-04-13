@@ -1,5 +1,6 @@
 name: sklearn.dbscan
 version: 1
+change_type: net_new
 description: DBSCAN density-based clustering.
 category: clustering
 inputs:

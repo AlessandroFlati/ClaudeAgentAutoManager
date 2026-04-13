@@ -1,5 +1,6 @@
 name: convert.OhlcFrame_to_ReturnSeries
 version: 1
+change_type: net_new
 description: |
   Compute log returns from an OHLC DataFrame's close column.
   Returns a ReturnSeries of length n-1 (first row is dropped by diff).

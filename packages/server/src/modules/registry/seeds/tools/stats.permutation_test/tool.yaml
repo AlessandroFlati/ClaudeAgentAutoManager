@@ -1,5 +1,6 @@
 name: stats.permutation_test
 version: 1
+change_type: net_new
 description: General permutation test for an arbitrary statistic between two samples.
 category: hypothesis_testing
 inputs:

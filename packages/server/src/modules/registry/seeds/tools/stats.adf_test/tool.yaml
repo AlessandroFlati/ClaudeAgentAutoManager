@@ -1,5 +1,6 @@
 name: stats.adf_test
 version: 1
+change_type: net_new
 description: Augmented Dickey-Fuller test for stationarity of a time series.
 category: hypothesis_testing
 inputs:

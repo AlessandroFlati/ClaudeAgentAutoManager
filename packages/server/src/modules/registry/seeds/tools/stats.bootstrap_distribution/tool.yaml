@@ -1,5 +1,6 @@
 name: stats.bootstrap_distribution
 version: 1
+change_type: net_new
 description: Compute the bootstrap sampling distribution of a statistic over a 1-D sample.
 category: hypothesis_testing
 inputs:

@@ -1,5 +1,6 @@
 name: sklearn.lasso
 version: 1
+change_type: net_new
 description: Fit a Lasso regression model using scikit-learn and return coefficients, intercept, and R-squared.
 category: regression
 inputs:

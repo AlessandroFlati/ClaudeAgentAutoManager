@@ -1,5 +1,6 @@
 name: sklearn.tsne
 version: 1
+change_type: net_new
 description: t-SNE dimensionality reduction for visualization.
 category: decomposition
 inputs:

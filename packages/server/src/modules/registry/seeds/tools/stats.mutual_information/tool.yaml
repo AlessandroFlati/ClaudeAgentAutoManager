@@ -1,5 +1,6 @@
 name: stats.mutual_information
 version: 1
+change_type: net_new
 description: Estimate mutual information between two discrete-valued 1-D arrays using sklearn.metrics.mutual_info_score.
 category: information_theory
 inputs:

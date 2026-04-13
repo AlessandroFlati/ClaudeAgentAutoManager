@@ -1,5 +1,6 @@
 name: scipy.linprog
 version: 1
+change_type: net_new
 description: Solve a linear programming problem (minimize c @ x subject to A_ub @ x <= b_ub) using scipy.optimize.linprog.
 category: optimization
 tags: [optimization, linear-programming, scipy, numpy]

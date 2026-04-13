@@ -1,5 +1,6 @@
 name: stats.describe
 version: 1
+change_type: net_new
 description: Compute summary statistics (count, mean, std, min, quartiles, max) for numeric columns.
 category: descriptive_stats
 inputs:

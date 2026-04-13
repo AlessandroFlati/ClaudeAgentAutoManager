@@ -10,7 +10,8 @@ import type {
   NodeSnapshot,
   RunSnapshot,
 } from './types.js';
-import { TRANSITIONS } from './types.js';
+import { TRANSITIONS, DEFAULT_VERSION_POLICY } from './types.js';
+import { matchesAnyGlob } from './glob-match.js';
 import { SignalWatcher } from './signal-watcher.js';
 import { validateSignalOutputs } from './signal-validator.js';
 import { generatePurpose } from './purpose-templates.js';
@@ -247,6 +248,44 @@ export class DagExecutor {
   }
 
   /**
+   * Resolve tool versions at workflow start for pin_at_start policy.
+   * Returns a map of toolName -> pinned version number.
+   */
+  private async resolveToolVersions(): Promise<Record<string, number>> {
+    const policy = this.workflowConfig.version_policy ?? DEFAULT_VERSION_POLICY;
+    if (!this.registryClient) return {};
+    if (policy.resolution !== 'pin_at_start') return {};
+
+    const resolved: Record<string, number> = {};
+    for (const [nodeName, nodeDef] of Object.entries(this.workflowConfig.nodes)) {
+      if (nodeDef.kind !== 'tool' || !nodeDef.tool) continue;
+      const toolName = nodeDef.tool;
+      if (matchesAnyGlob(toolName, policy.dynamic_tools)) continue;
+      const record = this.registryClient.get(toolName);
+      if (!record) {
+        throw new Error(`Tool "${toolName}" not found in registry (referenced by node "${nodeName}")`);
+      }
+      if (!(toolName in resolved)) {
+        resolved[toolName] = record.version;
+      }
+    }
+    return resolved;
+  }
+
+  /**
+   * Resolve the pinned version for a tool at dispatch time.
+   * Returns undefined if the tool should resolve to latest.
+   */
+  private resolveToolVersion(toolName: string): number | undefined {
+    const policy = this.workflowConfig.version_policy ?? DEFAULT_VERSION_POLICY;
+    if (matchesAnyGlob(toolName, policy.dynamic_tools)) return undefined;
+    if (policy.resolution === 'pin_at_start') {
+      return this.workflowConfig._resolved_tools?.[toolName];
+    }
+    return undefined;  // always_latest: let registry resolve
+  }
+
+  /**
    * Handle a tool proposal embedded in a signal's decision field.
    * Called when signal.decision contains a toolProposal key.
    * T21: agent registration — tests are skipped for agent-proposed tools in this phase.
@@ -390,6 +429,9 @@ export class DagExecutor {
       }
       this.resolvedPlan = typeCheckResult.resolvedPlan;
     }
+
+    const resolvedTools = await this.resolveToolVersions();
+    this.workflowConfig._resolved_tools = resolvedTools;
 
     await this.initializeRunDirectory(inputManifest);
 
@@ -742,6 +784,7 @@ export class DagExecutor {
       completed_at: null,
       status: 'running',
       config: this.workflowConfig.config,
+      resolved_tools: this.workflowConfig._resolved_tools ?? {},
       summary: null,
       artifacts: [],
     });
@@ -1904,6 +1947,7 @@ export class DagExecutor {
       invocationResult = await this.registryClient.invoke(
         {
           toolName,
+          version: this.resolveToolVersion(toolName),
           inputs: toolInputs,
           callerContext: {
             workflowRunId: this.runId,

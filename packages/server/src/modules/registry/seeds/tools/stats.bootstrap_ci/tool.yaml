@@ -1,5 +1,6 @@
 name: stats.bootstrap_ci
 version: 1
+change_type: net_new
 description: Compute a bootstrap confidence interval for the mean of a sample.
 category: hypothesis_testing
 inputs:

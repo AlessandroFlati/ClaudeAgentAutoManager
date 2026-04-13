@@ -1,5 +1,6 @@
 name: json.load
 version: 1
+change_type: net_new
 description: Load a JSON file from disk and return its contents as a JsonObject.
 category: data_io
 inputs:

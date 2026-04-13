@@ -1,5 +1,6 @@
 name: plot.scatter
 version: 1
+change_type: net_new
 description: Render a scatter plot of y vs x and save it as a PNG file.
 category: plotting
 inputs:

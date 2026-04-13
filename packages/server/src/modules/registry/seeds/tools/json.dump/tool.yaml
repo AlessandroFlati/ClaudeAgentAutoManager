@@ -1,5 +1,6 @@
 name: json.dump
 version: 1
+change_type: net_new
 description: Serialize a JsonObject to a JSON file on disk.
 category: data_io
 inputs:

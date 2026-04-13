@@ -138,15 +138,9 @@ This decision is now documented in `tool-registry.md` §9.5 (added in the design
 
 **Impact:** The synchronous API blocks the Node.js event loop during queries. For a single-user local server with tiny databases (hundreds of rows), this is undetectable. If the registry grows to thousands of tools or serves concurrent requests, the sync API could become a bottleneck.
 
-### 4.4 Run-Level ValueStore as In-Memory Map
+### ~~4.4 Run-Level ValueStore as In-Memory Map~~ — RESOLVED
 
-**Decision:** The value store holds structured values in a Node.js `Map<string, StoredValue>` in the server process's memory. Values are flushed to disk (`runs/{runId}/values/{handle}.json`) on node completion and loaded on demand during resume.
-
-**Rationale:** In-memory storage avoids the latency of reading large pickle blobs from disk on every tool call within a reasoning node's loop. The flush-on-completion design ensures durability for resume without impacting hot-path performance.
-
-**Impact:** Memory consumption grows with the number of structured values produced during a run. A workflow that produces hundreds of large DataFrames could exhaust server memory. No eviction policy exists.
-
-The in-memory storage pattern is an implementation detail. A note should be added to `node-runtimes.md` §5 or `persistence.md` documenting the memory implications (no eviction, grows with run size).
+This item has been documented. An implementation note was added to `node-runtimes.md` §5.3 describing the in-memory `Map<string, StoredValue>` pattern, its memory implications (no eviction, grows with run size), and the flush-on-completion design for resume durability. No longer undocumented.
 
 ---
 

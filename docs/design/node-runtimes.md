@@ -298,6 +298,8 @@ Downstream nodes that reference the output (via `${node.outputs.port}` in YAML o
 
 The run-level store is persistent for the duration of a run. When a run completes (or crashes and is resumed later), the values remain on disk. This is what enables resume: a node that had produced outputs before the crash has those outputs already stored and accessible to downstream nodes at resume time.
 
+**Implementation note:** During execution, the run-level store is held as an in-memory `Map<string, StoredValue>` in the server process. Values are flushed to disk on node completion and loaded on demand during resume. This means memory consumption grows with the number of structured values produced during a run — a workflow that produces hundreds of large DataFrames could exhaust server memory. No eviction policy currently exists; large-value workflows should be monitored for memory pressure. A future enhancement could add LRU eviction with disk-backed fallback.
+
 After a run completes, the values can be garbage-collected based on retention policy — by default they are kept for 7 days and then pruned. Findings and small outputs are retained longer; large tensor-like values are pruned aggressively because they are rarely inspected post-run.
 
 ### 5.4 Handle Resolution and Safety

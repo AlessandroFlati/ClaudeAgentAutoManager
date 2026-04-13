@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import type { NodeState } from '../../types';
 import './DagVisualization.css';
 
 interface DagNode {
@@ -10,6 +11,9 @@ interface DagNode {
 interface DagVisualizationProps {
   nodes: DagNode[];
   yamlContent: string;
+  nodesDetail?: NodeState[];
+  selectedNode?: string | null;
+  onNodeSelect?: (nodeName: string | null) => void;
 }
 
 interface LayoutNode {
@@ -172,9 +176,27 @@ function computeLayout(nodes: DagNode[], edges: Edge[]): { layout: LayoutNode[];
   return { layout, width: Math.max(totalWidth, 300), height: Math.max(totalHeight, 150) };
 }
 
-export function DagVisualization({ nodes, yamlContent }: DagVisualizationProps) {
+export function DagVisualization({ nodes, yamlContent, nodesDetail, selectedNode, onNodeSelect }: DagVisualizationProps) {
+  const [showConverters, setShowConverters] = useState(false);
+
+  const detailMap = useMemo(() => {
+    const m = new Map<string, NodeState>();
+    if (nodesDetail) {
+      for (const nd of nodesDetail) m.set(nd.nodeName, nd);
+    }
+    return m;
+  }, [nodesDetail]);
+
+  const visibleNodes = useMemo(() => {
+    if (showConverters || !nodesDetail) return nodes;
+    return nodes.filter(n => {
+      const d = detailMap.get(n.name);
+      return !d || d.kind !== 'converter';
+    });
+  }, [nodes, nodesDetail, showConverters, detailMap]);
+
   const edges = useMemo(() => parseEdgesFromYaml(yamlContent), [yamlContent]);
-  const { layout, width: graphW, height: graphH } = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
+  const { layout, width: graphW, height: graphH } = useMemo(() => computeLayout(visibleNodes, edges), [visibleNodes, edges]);
   const layoutMap = new Map(layout.map(n => [n.name, n]));
   const activeStates = new Set(['running', 'spawning', 'validating']);
 
@@ -241,16 +263,39 @@ export function DagVisualization({ nodes, yamlContent }: DagVisualizationProps) 
     <div
       className="dag-viz"
       ref={containerRef}
+      style={{ position: 'relative' }}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
+      {nodesDetail && (
+        <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowConverters(v => !v); }}
+            style={{
+              fontSize: 11,
+              padding: '3px 9px',
+              background: showConverters ? 'var(--color-accent, #569cd6)' : 'transparent',
+              border: '1px solid var(--color-border, #555)',
+              borderRadius: 4,
+              color: showConverters ? '#fff' : 'var(--color-text-secondary, #888)',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-ui)',
+            }}
+          >
+            Show converters
+          </button>
+        </div>
+      )}
       <svg
         width="100%"
         height="100%"
         style={{ cursor: dragging ? 'grabbing' : 'grab' }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget && onNodeSelect) onNodeSelect(null);
+        }}
       >
         <defs>
           <marker id="dag-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
@@ -290,10 +335,21 @@ export function DagVisualization({ nodes, yamlContent }: DagVisualizationProps) 
           {layout.map(node => {
             const color = STATE_COLORS[node.state] ?? STATE_COLORS.pending;
             const isActive = activeStates.has(node.state);
+            const isSelected = selectedNode === node.name;
             const displayName = node.name.length > 12 ? node.name.slice(0, 11) + '..' : node.name;
+            const detail = detailMap.get(node.name);
+            const isConverter = detail?.kind === 'converter';
+            const secondaryLabel = detail?.kind === 'tool' ? (detail.toolName ?? '') : '';
 
             return (
-              <g key={node.name}>
+              <g
+                key={node.name}
+                style={{ cursor: onNodeSelect ? 'pointer' : undefined }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onNodeSelect) onNodeSelect(node.name);
+                }}
+              >
                 <rect
                   x={node.x}
                   y={node.y}
@@ -301,16 +357,28 @@ export function DagVisualization({ nodes, yamlContent }: DagVisualizationProps) 
                   height={NODE_H}
                   rx={NODE_RX}
                   fill={color + '20'}
-                  stroke={color}
-                  strokeWidth={isActive ? 2 : 1}
+                  stroke={isSelected ? '#ffffff' : color}
+                  strokeWidth={isSelected ? 2 : isActive ? 2 : 1}
+                  strokeDasharray={isConverter ? '4 2' : undefined}
                 />
                 <text
                   className="dag-viz-node-label"
                   x={node.x + NODE_W / 2}
-                  y={node.y + NODE_H / 2 + 4}
+                  y={node.y + (secondaryLabel ? NODE_H / 2 : NODE_H / 2 + 4)}
                 >
                   {displayName}
                 </text>
+                {secondaryLabel && (
+                  <text
+                    x={node.x + NODE_W / 2}
+                    y={node.y + NODE_H / 2 + 13}
+                    textAnchor="middle"
+                    fontSize={10}
+                    fill="rgba(255,255,255,0.5)"
+                  >
+                    {secondaryLabel.length > 14 ? secondaryLabel.slice(0, 13) + '..' : secondaryLabel}
+                  </text>
+                )}
               </g>
             );
           })}

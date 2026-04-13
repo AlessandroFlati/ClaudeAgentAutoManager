@@ -36,6 +36,7 @@ export class RegistryClient {
   private readonly pythonPath: string | null;
   private resolvedPythonPath: string | null = null;
   private initialized = false;
+  private readonly onDestructiveChange: ((event: import('./types.js').DestructiveChangeEvent) => Promise<void>) | null;
 
   /** Resolved Python interpreter; null if probing failed. */
   get python(): string | null {
@@ -47,6 +48,7 @@ export class RegistryClient {
     this.db = new RegistryDb(this.layout.dbPath);
     this.schemas = new SchemaRegistry();
     this.pythonPath = options.pythonPath ?? null;
+    this.onDestructiveChange = options.onDestructiveChange ?? null;
   }
 
   async initialize(): Promise<void> {
@@ -275,6 +277,17 @@ export class RegistryClient {
         durationMs: Date.now() - start,
       });
 
+      // T12: fire the destructive-change callback (fire-and-catch — must not roll back registration)
+      if (manifest.change_type === 'destructive' && manifest.version > 1 && this.onDestructiveChange) {
+        this.onDestructiveChange({
+          toolName: manifest.name,
+          oldVersion: manifest.version - 1,
+          newVersion: manifest.version,
+        }).catch(err => {
+          console.error('[registry] destructive change protocol error:', err);
+        });
+      }
+
       return {
         success: true,
         toolName: manifest.name,
@@ -405,6 +418,18 @@ export class RegistryClient {
 
   getConverter(src: string, tgt: string): ConverterRecord | null {
     return this.db.getConverter(src, tgt);
+  }
+
+  // T15: retrieve a specific (name, version) pair — used by the resume check
+  async getVersion(toolName: string, version: number): Promise<ToolRecord | null> {
+    const record = this.db.findToolVersion(toolName, version);
+    return record ? this.withDirectory(record) : null;
+  }
+
+  // T15: retrieve the highest active version of a tool
+  async getLatest(toolName: string): Promise<ToolRecord | null> {
+    const record = this.db.findLatestVersion(toolName);
+    return record ? this.withDirectory(record) : null;
   }
 
   searchTools(query: string): ToolRecord[] {

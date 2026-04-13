@@ -614,6 +614,24 @@ export class RegistryDb {
     }));
   }
 
+  // T15: look up a specific (name, version) pair
+  findToolVersion(name: string, version: number): ToolRecord | null {
+    const row = this.raw().prepare(
+      'SELECT * FROM tools WHERE name = ? AND version = ?'
+    ).get(name, version) as ToolRow | undefined;
+    if (!row) return null;
+    return this.hydrateTool(row);
+  }
+
+  // T15: look up the highest active version of a tool
+  findLatestVersion(name: string): ToolRecord | null {
+    const row = this.raw().prepare(
+      "SELECT * FROM tools WHERE name = ? AND status = 'active' ORDER BY version DESC LIMIT 1"
+    ).get(name) as ToolRow | undefined;
+    if (!row) return null;
+    return this.hydrateTool(row);
+  }
+
   appendRegistrationLog(row: RegistrationLogRow): void {
     this.raw()
       .prepare(

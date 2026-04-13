@@ -225,9 +225,16 @@ export interface TestRunResult {
 
 // ---------- Client options ----------
 
+export interface DestructiveChangeEvent {
+  toolName: string;
+  oldVersion: number;
+  newVersion: number;
+}
+
 export interface RegistryClientOptions {
   rootDir?: string;          // defaults to ~/.plurics/registry; override via PLURICS_REGISTRY_ROOT
   pythonPath?: string;       // absolute path; resolved at initialize() if omitted
+  onDestructiveChange?: (event: DestructiveChangeEvent) => Promise<void>;
 }
 
 // ---------- Value Store (Node Runtimes Phase 2) ----------

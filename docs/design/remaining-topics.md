@@ -1,6 +1,6 @@
 # Plurics — Remaining Topics, Open Questions, and Architectural Decisions
 
-**Date:** 2026-04-12
+**Date:** 2026-04-11
 **Scope:** Comprehensive inventory of deferred features, open design questions, cross-document inconsistencies, undocumented decisions, missing documentation, and known gaps across the entire Plurics project
 **Status:** Living document — update as items are resolved or new ones are discovered
 **Audience:** Contributors, maintainers, future design sessions
@@ -20,10 +20,8 @@ Items that are described in design documents but deliberately excluded from the 
 | Shared registries | `tool-registry.md` §12 | Post-MVP | Each Plurics installation has its own registry. No git-sync, export/import, or hosted registry. Teams share tools by copying directories. |
 | Dynamic virtualenv management | `tool-registry.md` §12 | Post-MVP | Tools declare `requires` but the user installs dependencies manually. No automatic `pip install`, no per-tool virtualenv isolation. |
 | MCP server bridge | `tool-registry.md` §12 | Post-MVP | Registry tools are not exposed via the Model Context Protocol. A thin MCP adapter over the registry API is architecturally straightforward but unbuilt. |
-| Tool-authoring UI | `tool-registry.md` §12 | Phase 7 | No browser-based interface for writing, testing, or registering tools. All authoring is file-based or programmatic. |
-| Invocation cache | `tool-registry.md` §9.4 | Post-MVP | Every `invoke()` runs the tool fresh. Caching by `(name, version, inputs_hash)` is designed but unimplemented. The cache directory exists in the layout spec but is empty. |
-| Agent test runner | `tool-registry.md` §3.3 | Phase 6 | `RegistryClient.register({caller: 'agent', testsRequired: true})` returns a stub error. The code path exists but the test execution subprocess is not wired. The `onToolProposal` plugin hook depends on this for safe agent-generated tool registration. |
-| Full-text search | `tool-registry.md` §5.2 | Unscheduled | `RegistryClient.search("fourier transform")` is not implemented. Discovery is limited to `get`, `list`, `findProducers`, `findConsumers`. |
+| Invocation cache | `tool-registry.md` §9.4 | Post-MVP | Every `invoke()` runs the tool fresh. Caching by `(name, version, inputs_hash)` is designed but unimplemented. The cache directory exists in the layout spec but is empty. The REST endpoint `GET /api/registry/tools/:name/:version/invocations` exists but returns an empty array stub. |
+| Agent test runner | `tool-registry.md` §3.3 | Phase 6 | `RegistryClient.register({caller: 'agent', testsRequired: true})` returns a stub error. The code path exists but the test execution subprocess is not wired. The `onToolProposal` hook is implemented (Plugin SDK compliance) but the downstream test execution subprocess it depends on remains a stub. |
 
 ### 1.2 Type System
 
@@ -43,6 +41,8 @@ Items that are described in design documents but deliberately excluded from the 
 
 ### 1.4 Evolutionary Pool
 
+The evolutionary pool compliance work addressed the 8 implementation gaps identified in the audit (content-hash IDs, 6-status lifecycle, `stats()`, `list(filters)`, descendants lineage, custom strategy registration, deduplication, `onEvaluationResult` auto-update). The remaining deferred items are:
+
 | Feature | Source | Target | Description |
 |---|---|---|---|
 | Multi-population (island model) | `evolutionary-pool.md` §10 | Post-MVP | Single population per workflow run. No migration between populations, no parallel evolution. |
@@ -59,11 +59,12 @@ Items that are described in design documents but deliberately excluded from the 
 
 ### 1.6 UI and Observability
 
+The UI is now ~90% compliant with `ui.md`. The remaining gap is the Findings Dashboard (§3.10), which is lower priority per the design doc.
+
 | Feature | Source | Target | Description |
 |---|---|---|---|
-| Tool registry browser | `tool-registry.md` Phase 7 | Phase 7 | No REST/WebSocket endpoints for the registry. No React component for browsing, searching, or inspecting tools. |
-| Converter graph visualization | `type-system.md` Phase 4e | Post-MVP | Inserted converters are tracked in the run trace but not displayed as ghost nodes in the DAG visualizer. |
-| Workflow findings dashboard | `HIGH_LEVEL_DESIGN.md` §10 | Unscheduled | Findings panel exists in the frontend but aggregation, filtering, and cross-run comparison are not specified. |
+| Converter graph visualization | `type-system.md` Phase 4e | Post-MVP | The DAG visualizer update includes a toggle for converter ghost nodes (implemented in `DagVisualization.tsx` augmentation). Cross-converter path visualization (multi-hop chains) remains unimplemented. |
+| Workflow findings dashboard | `HIGH_LEVEL_DESIGN.md` §10 | Unscheduled | A findings panel exists in the frontend but cross-run aggregation, filtering, and comparison are not implemented. This is the last major gap between the current UI and full `ui.md` compliance. |
 
 ---
 
@@ -105,25 +106,7 @@ Places where two design documents describe the same concept differently, or wher
 - **Current implementation** has `kind: tool` parsed by the YAML parser and dispatched by the DAG executor, but tool nodes are rare in practice. The five existing workflows use only `kind: reasoning` nodes. No real workflow exercises the `kind: tool` path end-to-end with upstream value references.
 - **Impact:** This is not a cross-document inconsistency — both docs agree on the syntax. The gap is that the `kind: tool` path is implemented but under-exercised in real workflows. All five existing workflows use only `kind: reasoning` nodes. The tool-node dispatch path should be stressed when `sequence-explorer` or `math-discovery` are built, as that will surface any integration issues. The DAG executor's `resolveUpstreamRefs` for tool node inputs has only been tested with one integration test.
 
-### 3.2 Signal Schema Evolution
-
-- **`workflow-engine.md` §6.1** defines signal v1 with `outputs` as an array of `{path, sha256, size_bytes}`.
-- **`node-runtimes.md` §3.3** redefines signal outputs for tool nodes as `{port, schema, value_ref, sha256, size_bytes}` — adding `port`, `schema`, and `value_ref` while deprecating `path`.
-- **Current implementation** uses a hybrid: tool node signals written by the DAG executor include `value_ref` and `summary` fields; legacy reasoning node signals still use the `path`-based format.
-- **Impact:** Signal consumers (the UI, the signal validator, the resume logic) must handle both formats. The `signal-validator.ts` was updated to accept both, but the design docs should be reconciled to specify a single v2 format.
-
-### 3.3 Naming of Selection Strategies
-
-- **`evolutionary-pool.md` §4.1** names the strategies: `top-k`, `tournament`, `roulette-wheel`, `random`.
-- **Implementation** uses: `top-k`, `tournament`, `roulette`, `random` (without `-wheel` suffix).
-- **Impact:** Minor naming inconsistency. The design doc should be updated to match the implementation.
-
-### 3.4 stats.describe Output Schema
-
-- **`seed-tools.md`** specifies `stats.describe` output as `stats: DataFrame`.
-- **`tool-registry.md` §11** (original design) says the seed tool outputs `Statistics` (a dict-like schema).
-- **Implementation** returns `stats: DataFrame` (matching the seed-tools.md spec).
-- **Impact:** The `tool-registry.md` §11 example is outdated. The seed-tools.md spec takes precedence.
+All previously identified cross-document inconsistencies (§3.2 signal schema, §3.3 selection strategy naming, §3.4 stats.describe output) have been resolved. See commit `c610b4c` for the reconciliation.
 
 ---
 
@@ -143,13 +126,9 @@ Implementation choices made during development that are not recorded in any desi
 
 This is an implementation detail that belongs in a future `docs/development/build-system.md` guide, not in the architectural design documents. Tracked as backlog.
 
-### 4.2 Python Interpreter Probing
+### 4.2 Python Interpreter Probing — RESOLVED
 
-**Decision:** At `RegistryClient.initialize()`, the system probes for a Python interpreter in order: `python3`, `python` (Unix) or `python`, `py` (Windows). The first that responds to `--version` is cached. For the Windows `py` launcher, `-3` is prepended to all subsequent spawn arguments.
-
-**Rationale:** Windows does not guarantee `python` is in PATH. The `py` launcher (installed with Python from python.org) is the standard way to invoke Python on Windows. The `-3` flag selects Python 3 explicitly.
-
-**Impact:** Tools that spawn Python subprocesses outside the registry (e.g., the runner, the test fixtures) must use the same resolved interpreter path. A mismatch could cause tools to run under a different Python version than the one the registry was initialized with.
+This decision is now documented in `tool-registry.md` §9.5 (added in the design doc reconciliation commit `c610b4c`). It is no longer undocumented. Summary: at `RegistryClient.initialize()`, the system probes `python3` → `python` (Unix) or `python` → `py` (Windows); the Windows `py` launcher prepends `-3` to all subsequent spawn arguments. See `tool-registry.md` §9.5 for the authoritative description.
 
 ### 4.3 Synchronous SQLite via `better-sqlite3`
 
@@ -178,7 +157,6 @@ Documents referenced in existing design docs but not yet written.
 | Document | Referenced by | Purpose |
 |---|---|---|
 | `docs/design/overview.md` | Every design doc's "Parent document" field | System-level architecture overview. Currently `HIGH_LEVEL_DESIGN.md` serves this role, but some docs reference `overview.md` by name. Decide whether to rename `HIGH_LEVEL_DESIGN.md` to `overview.md` or update references. |
-| `docs/design/ui.md` | `HIGH_LEVEL_DESIGN.md` §10, `persistence.md` | Frontend architecture: React component tree, WebSocket protocol, REST API surface, DAG visualizer, findings panel, tool browser, workflow controls. |
 | `docs/guides/writing-workflows.md` | `HIGH_LEVEL_DESIGN.md` §13 | User-facing tutorial: how to write a workflow YAML, define presets, write a plugin, run and debug. |
 | `docs/guides/building-tools.md` | `HIGH_LEVEL_DESIGN.md` §13 | User-facing tutorial: how to write a tool.yaml + tool.py, register it, test it, use it from a workflow. |
 
@@ -206,13 +184,15 @@ Known structural debt (not marked in code):
 | Type system (parser, checker, converters) | Strong | Converter insertion e2e | N/A | 28 type-parser + 17 checker + converter tests |
 | Agent backends (claude, openai-compat, ollama) | Mocked fetch | N/A | N/A | No real LLM calls in tests |
 | Reasoning runtime (tool-calling loop) | Fully mocked | N/A | N/A | 9+ tests covering loop, retry budget, max turns, signal parsing |
-| Plugin SDK | 17 tests | N/A | N/A | Covers declareTools, onToolProposal, error handling |
-| Evolutionary pool | 50 tests | N/A | N/A | Covers all 8 compliance items |
+| Plugin SDK | Strong | N/A | N/A | Covers all 9 hooks, declareTools, onToolProposal, error handling per design §9 |
+| Evolutionary pool | Strong | N/A | N/A | Covers all 8 compliance items |
 | Workflow engine (DAG executor) | Moderate | Tool-node chain | N/A | State machine transitions under-tested; fan-out under-tested |
 | Resume protocol | Minimal | N/A | N/A | No test creates a run, interrupts it, and resumes |
-| Frontend (React) | Unknown | Unknown | Unknown | Not audited in this session |
+| Frontend (React) | N/A | N/A | N/A | tsc clean; no test framework; visual/interaction testing pending |
 
-**Key gap:** No end-to-end test that starts a real workflow with a real LLM backend, reasoning nodes calling registered tools, and produces a signal-based outcome. All reasoning tests use mocked backends.
+**Total backend:** 459 tests across 46 test files, 0 failing.
+
+**Key gap:** No end-to-end test that starts a real workflow with a real LLM backend, reasoning nodes calling registered tools, and produces a signal-based outcome. All reasoning tests use mocked backends. Additionally, the frontend components have not been tested in a browser — they compile cleanly but visual/interaction testing is pending.
 
 ---
 
@@ -243,14 +223,15 @@ For reference, here is the mapping from design docs to implementation phases as 
 
 | Design Document | Implementation Phases | Status |
 |---|---|---|
-| `tool-registry.md` | TR Phase 1-2 (core), TR Phase 3 (seeds), TR Phase 4 (type system) | Done |
+| `tool-registry.md` | TR Phase 1-2 (core), TR Phase 3 (seeds), TR Phase 4 (type system), Seed Tools compliance | Done |
 | `node-runtimes.md` | NR Phase 1 (backends), NR Phase 2 (value store), NR Phase 3 (tool-calling) | Done |
 | `type-system.md` | TR Phase 4a-4e | Done |
-| `seed-tools.md` | TR Phase 3 pilot + full + compliance | Done |
-| `plugin-sdk.md` | Plugin SDK compliance (refactor + 3 new hooks) | Done |
+| `seed-tools.md` | TR Phase 3 pilot + full + compliance (11 tools added, 3 renamed, port fixes, 77/77 test files) | Done |
+| `plugin-sdk.md` | Plugin SDK compliance (PlatformServices, all 9 hooks refactored, 5 plugins migrated, declareTools + onToolProposal + onToolRegression) | Done |
 | `workflow-engine.md` | Pre-existing (core engine), verified in audit | Done (~90%) |
-| `evolutionary-pool.md` | Evo pool compliance (8 gaps fixed) | Done (~95%) |
-| `persistence.md` | Partially pre-existing, partially deferred | Partial |
+| `evolutionary-pool.md` | Evo pool compliance (8 gaps fixed: content-hash IDs, 6-status lifecycle, stats, filtering, strategies, deduplication, descendants, auto-update) | Done (~95%) |
+| `ui.md` | UI Backend (13 registry REST endpoints, 5 WebSocket types, run-controller.ts) + UI Frontend (25 React components covering all 10 UI sections) | Done (~90%) |
+| `persistence.md` | Partially pre-existing, partially deferred — backend endpoints added but persistence layer gaps remain | Partial |
 | `HIGH_LEVEL_DESIGN.md` | Overarching — no single phase | Reference |
 | `MANIFESTO.md` | Architectural commitment — verified operationally | Reference |
 

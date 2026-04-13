@@ -1,5 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs';
+import fsPromises from 'node:fs/promises';
 import path from 'node:path';
 import express from 'express';
 import { AgentRegistry } from './modules/agents/agent-registry.js';
@@ -10,12 +11,117 @@ import { PresetRepository } from './db/preset-repository.js';
 import { WorkflowRepository } from './db/workflow-repository.js';
 import { AgentBootstrap } from './modules/knowledge/agent-bootstrap.js';
 import { seedPresetsFromFilesystem } from './modules/workflow/preset-resolver.js';
-import { resolvePluricsPath } from './modules/workflow/utils.js';
+import { resolvePluricsPath, writeJsonAtomic } from './modules/workflow/utils.js';
 import { RegistryClient } from './modules/registry/index.js';
 import { loadSeedTools } from './modules/registry/seeds/index.js';
-import type { ListFilters, ToolRecord, ToolStatus } from './modules/registry/types.js';
+import type { ListFilters, ToolRecord, ToolStatus, DestructiveChangeEvent } from './modules/registry/types.js';
 import { activeExecutors } from './transport/websocket.js';
 import { createAndStartExecutor } from './modules/workflow/run-controller.js';
+import { EvolutionaryPool } from './modules/workflow/evolutionary-pool.js';
+import { DEFAULT_VERSION_POLICY } from './modules/workflow/types.js';
+import { parseWorkflow } from './modules/workflow/yaml-parser.js';
+
+// T13 + T17: Handle a destructive tool registration event — scan affected runs, apply policy, emit WS events.
+async function handleDestructiveChange(
+  event: DestructiveChangeEvent,
+  wfRepo: WorkflowRepository,
+  registryDb: RegistryClient,
+  broadcast: (msg: object) => void,
+): Promise<void> {
+  const { toolName, oldVersion, newVersion } = event;
+
+  // 1. Find all active/interrupted runs
+  const allRuns = wfRepo.listRuns().filter(r => r.status === 'running');
+  const affectedRunIds: string[] = [];
+
+  // Check which runs used oldVersion of this tool
+  for (const run of allRuns) {
+    const runDir = resolvePluricsPath(run.workspace_path, 'runs', run.id);
+    const metaPath = path.join(runDir, 'run-metadata.json');
+    let resolvedTools: Record<string, number> = {};
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as { resolved_tools?: Record<string, number> };
+      resolvedTools = meta.resolved_tools ?? {};
+    } catch { /* no metadata — check invocations fallback */ }
+
+    const pinned = resolvedTools[toolName];
+    const affected = pinned === oldVersion;
+    if (!affected) continue;
+    affectedRunIds.push(run.id);
+  }
+
+  // T17: emit destructive_change_detected
+  broadcast({ type: 'destructive_change_detected', toolName, oldVersion, newVersion, affectedRunIds });
+
+  // 2. For each affected run, apply version_policy
+  for (const runId of affectedRunIds) {
+    const run = wfRepo.getRun(runId);
+    if (!run) continue;
+
+    // Determine version_policy
+    let policy = DEFAULT_VERSION_POLICY;
+    try {
+      const wfConfig = parseWorkflow(run.yaml_content);
+      if (wfConfig.version_policy) policy = wfConfig.version_policy;
+    } catch { /* use default */ }
+
+    const action = policy.on_destructive_change.action;
+
+    // T17: emit version_policy_applied
+    broadcast({ type: 'version_policy_applied', runId, action, toolName });
+
+    if (action === 'abort') {
+      try {
+        wfRepo.updateRunStatus(runId, 'aborted' as never, 0, 0);
+      } catch { /* best effort */ }
+      continue;
+    }
+
+    if (action === 'ignore') {
+      continue;
+    }
+
+    // invalidate_and_continue
+    const runDir = resolvePluricsPath(run.workspace_path, 'runs', runId);
+
+    // Update resolved_tools pin in run-metadata.json
+    let meta: Record<string, unknown> = {};
+    const metaPath = path.join(runDir, 'run-metadata.json');
+    try {
+      meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as Record<string, unknown>;
+    } catch { /* no metadata */ }
+    const resolvedTools = (meta.resolved_tools ?? {}) as Record<string, number>;
+    resolvedTools[toolName] = newVersion;
+    meta.resolved_tools = resolvedTools;
+    try {
+      await writeJsonAtomic(metaPath, meta);
+    } catch (err) {
+      console.error(`[destructive-change] failed to update run-metadata.json for ${runId}:`, err);
+    }
+
+    // T17: emit pin_updated
+    broadcast({ type: 'pin_updated', runId, toolName, fromVersion: oldVersion, toVersion: newVersion });
+
+    // Invalidate pool candidates
+    const poolPath = path.join(runDir, 'pool-state.json');
+    let findingsCount = 0;
+    let candidatesCount = 0;
+    try {
+      const poolSnapshot = JSON.parse(fs.readFileSync(poolPath, 'utf-8'));
+      const pool = new EvolutionaryPool();
+      pool.restore(poolSnapshot);
+      const candidates = pool.list(); // excludes already-invalidated
+      for (const cand of candidates) {
+        pool.invalidate(cand.id, `destructive_change:${toolName}:v${oldVersion}->v${newVersion}`);
+        candidatesCount++;
+      }
+      await writeJsonAtomic(poolPath, pool.snapshot());
+    } catch { /* no pool snapshot — skip */ }
+
+    // T17: emit artifacts_invalidated
+    broadcast({ type: 'artifacts_invalidated', runId, toolName, findingsCount, candidatesCount });
+  }
+}
 
 const PORT = parseInt(process.env.PORT ?? '11001', 10);
 
@@ -25,7 +131,14 @@ const server = http.createServer(app);
 
 const registry = new AgentRegistry();
 const bootstrap = new AgentBootstrap();
-export const toolRegistry = new RegistryClient();
+// broadcastAll is defined later; capture a reference so the callback can call it after setup
+let broadcastAllRef: ((msg: object) => void) = () => {}; // no-op until wss is ready
+
+export const toolRegistry = new RegistryClient({
+  onDestructiveChange: async (event) => {
+    await handleDestructiveChange(event, workflowRepo, toolRegistry, broadcastAllRef);
+  },
+});
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -625,6 +738,8 @@ function broadcastAll(msg: object): void {
     if (client.readyState === 1 /* OPEN */) client.send(raw);
   });
 }
+// Wire up the destructive-change broadcast now that broadcastAll is available
+broadcastAllRef = broadcastAll;
 
 // Auto-seed presets from filesystem on startup
 const seeded = seedPresetsFromFilesystem(projectRoot, presetRepo);

@@ -551,70 +551,229 @@ The exception is the optional invocation cache in `~/.plurics/registry/cache/`. 
 
 ## 7. Schema Migrations
 
-When the SQLite schemas change between Plurics versions (new tables, new columns, modified constraints), existing databases need to be migrated. This section specifies the migration mechanism.
+When the SQLite schemas change between Plurics versions (new tables, new columns, modified constraints, indexes), existing user databases need to be migrated so that the stored data remains accessible under the new schema. This section specifies the migration mechanism.
 
-### 7.1 The Migration Approach
+#### 7.1 The Hybrid Approach
 
-Plurics uses **forward-only incremental migrations**. Each migration is a SQL script that takes the database from version N to version N+1. Migrations are stored as files in `~/.plurics/migrations/{database_name}/{version}_{description}.sql` and are executed in order at startup when the database version is behind the expected version.
+Plurics uses **forward-only incremental migrations** expressed as numbered files in a directory under the server's code. The default format is SQL, which handles the overwhelming majority of schema changes (adding tables, adding columns, creating indexes, constraint modifications). For the rare cases where a migration requires logic beyond what SQL can express — reading existing rows, transforming them in TypeScript code, writing them back — a TypeScript migration file with the same numbering convention can be used instead. Both formats coexist in the same directory and are executed by the same runner in unified numerical order.
 
-The approach is the standard one used by tools like Flyway, Rails ActiveRecord, and Django South. The migration files are simple SQL, version-controlled with the codebase, and reviewed like any other code change. There is no migration framework with magic — just SQL files in a directory and a small runner that executes them.
+The approach is a compromise between two extremes. A pure SQL approach (files only) is clean and inspectable but cannot handle data transformations that need procedural logic. A pure TypeScript approach (functions only) is flexible but hides the schema evolution inside code that is harder to review than standalone SQL files. The hybrid gives each change the most appropriate form: simple DDL changes stay as SQL and can be reviewed like text, while complex data migrations get the full power of TypeScript when needed.
 
-A migration file looks like:
+This approach replaces the previous inline `CREATE TABLE IF NOT EXISTS` pattern that was used for the initial bootstrap and for the v1→v2 transition of `registry.db`. The inline pattern worked for the bootstrap phase but does not scale — after a handful of additions, the init code becomes a thicket of conditional statements that is hard to review and hard to trust. The file-based hybrid approach is the standard solution in the industry (Flyway, Rails ActiveRecord migrations, Alembic, Django South, Sqitch all use variants of this pattern) and it is well-understood by developers coming from other projects.
 
-```sql
--- migrations/plurics/004_add_workflow_findings.sql
+#### 7.2 Filesystem Layout
 
-CREATE TABLE IF NOT EXISTS workflow_findings (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  run_id TEXT NOT NULL REFERENCES workflow_runs(run_id),
-  node_name TEXT NOT NULL,
-  scope TEXT,
-  verdict TEXT NOT NULL,
-  summary TEXT,
-  file_path TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
+Migrations live in the server's code repository, not in the user's `~/.plurics/` directory. They are bundled with the Plurics installation and are treated as versioned source code, not as user data. The layout is:
 
-CREATE INDEX IF NOT EXISTS idx_findings_run ON workflow_findings(run_id);
-CREATE INDEX IF NOT EXISTS idx_findings_verdict ON workflow_findings(verdict, created_at);
-
-UPDATE schema_versions SET version = 4, applied_at = datetime('now'),
-  description = 'Add workflow_findings index table';
+```
+packages/server/src/db/
+├── migrations/
+│   ├── plurics/
+│   │   ├── 001_initial_schema.sql
+│   │   ├── 002_add_workflow_events.sql
+│   │   ├── 003_add_findings_count.sql
+│   │   └── 004_add_destructive_change_events.sql
+│   └── registry/
+│       ├── 001_initial_schema.sql
+│       ├── 002_add_converters.sql
+│       ├── 003_add_tool_invocations.sql
+│       └── 004_add_change_type_field.sql
+├── migrator.ts
+└── schema-versions.ts
 ```
 
-The script is designed to be idempotent (using `CREATE TABLE IF NOT EXISTS`) so that running it twice does not error. The final UPDATE bumps the schema version, recording that this migration has been applied.
+Each database has its own subdirectory under `migrations/`. The two databases (`plurics.db` and `registry.db`) are versioned independently — a release of Plurics may introduce migration `005` for `plurics.db` and `003` for `registry.db`, and the version numbers are not synchronized across databases.
 
-### 7.2 The Migration Runner
+The `migrator.ts` file contains the runner: a small module that reads a migrations directory, determines which files need to run based on the current state of `schema_versions`, and executes them in order. The `schema-versions.ts` file contains the TypeScript types and helper functions for reading and writing the version table.
 
-At Plurics startup, after opening the SQLite databases, the platform runs the migration runner for each database:
+Migrations are loaded from disk at startup. In development, they are read directly from the filesystem. In a packaged/bundled distribution (future), they are read from bundled resources included in the server package. The loading mechanism abstracts this difference so the runner code is independent of the deployment mode.
 
-1. Read the current schema version from `schema_versions`.
-2. Compare it to the expected version (a constant in the Plurics codebase that increments with each new migration).
-3. If the current version is lower, find all migration files with versions greater than the current and less than or equal to the expected version.
-4. Execute each migration file in order, in a transaction. If any migration fails, the transaction is rolled back, the database is left at the previous version, and Plurics startup fails with a clear error.
-5. After all migrations succeed, the database is at the expected version and Plurics proceeds with normal startup.
+#### 7.3 Naming Convention
 
-The migration runner is conservative: it never modifies a migration file after it has been applied (the version number is the contract), and it never skips migrations. The forward-only constraint means there are no down migrations — once a schema change is made, it is permanent. If a change needs to be undone, the undoing is a new forward migration.
+Every migration file follows a strict naming convention:
 
-### 7.3 Migration Principles
+```
+{three_digit_version}_{snake_case_description}.{sql|ts}
+```
 
-The conventions for writing migrations:
+Three digits zero-padded for the version number (001, 002, ..., 999), an underscore separator, a descriptive name in snake_case, and the file extension. Three digits are sufficient for any foreseeable number of migrations — 999 migrations would be an extreme number that would suggest the project has other problems. The zero-padding is essential because it makes lexicographic ordering coincide with numeric ordering, so a simple directory listing produces the correct execution order.
 
-**Idempotent.** Migrations should use `IF NOT EXISTS` clauses where possible so that running them twice is safe. This is defensive against accidental re-runs.
+The description should be specific enough to be meaningful in a directory listing. `003_add_findings_count.sql` is good; `003_update.sql` is not. A reviewer scrolling through the migrations directory should be able to reconstruct the schema's history from the filenames alone.
 
-**Backward-compatible at the data level when possible.** Adding columns is preferable to renaming or dropping. When a column needs to be removed, the migration should first add a deprecation marker and only drop the column in a later migration after the application code stops using it.
+Examples of well-named migrations:
 
-**Atomic.** Each migration is a single transaction. Either it all succeeds and the version is bumped, or it all fails and nothing is changed.
+```
+001_initial_schema.sql
+002_add_workflow_events_table.sql
+003_add_findings_count_column.sql
+004_rename_agent_to_node_name.sql
+005_create_tool_invocations_index.sql
+006_backfill_scope_field.ts        # TypeScript for data transformation
+```
 
-**Tested before release.** A migration is tested by applying it to a copy of a real database from the previous version. This catches issues like data type mismatches or constraint violations that wouldn't appear with a fresh empty database.
+#### 7.4 The `schema_versions` Table
 
-**Versioned with the code.** Migration files are committed to the Plurics repository and tagged with the release that introduces them. A user upgrading from version X to version Y always knows which migrations to expect.
+Each database has a `schema_versions` table that records the currently-applied schema version. The table has a single row at any time:
 
-### 7.4 Cross-Database Migrations
+```sql
+CREATE TABLE schema_versions (
+  version INTEGER PRIMARY KEY,
+  applied_at TEXT NOT NULL,
+  description TEXT
+);
+```
 
-When a single Plurics release introduces changes to both `plurics.db` and `registry.db`, both sets of migrations run at startup, independently. The two databases are versioned separately, so a release might introduce migration `005` for `plurics.db` and `003` for `registry.db` — the version numbers are not synchronized across databases.
+The `version` field is the highest migration number that has been successfully applied. The `applied_at` field is an ISO 8601 UTC timestamp of when the migration completed. The `description` field is a short human-readable note, typically taken from the migration's filename or from a comment in the migration file itself.
 
-Coordination between cross-database changes (e.g., adding a foreign key from `plurics.db` to a table in `registry.db`) is not supported. SQLite does not allow foreign keys across databases, and the Plurics architecture treats the two databases as independent. Cross-database integrity is maintained by the application code, not by database constraints.
+On a fresh database, the very first migration (`001_initial_schema.sql`) creates the `schema_versions` table as part of its SQL and inserts the initial row with `version = 1`. Subsequent migrations update the row via `UPDATE schema_versions SET version = N, applied_at = datetime('now'), description = '...'`.
+
+The existence of the `schema_versions` table is what the runner checks first to determine whether it is looking at a database managed by the new system or one from the pre-migration-system era. The transition from the old state is handled specially (§7.8).
+
+#### 7.5 Migration File Format
+
+**SQL migration files** are plain SQL with the expected DDL and optional DML statements. They are executed as a single script against the database. Example:
+
+```sql
+-- 003_add_findings_count.sql
+-- Adds findings_count column to workflow_runs for fast aggregate queries.
+
+ALTER TABLE workflow_runs ADD COLUMN findings_count INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_runs_findings_count
+  ON workflow_runs(findings_count) WHERE findings_count > 0;
+
+UPDATE schema_versions SET
+  version = 3,
+  applied_at = datetime('now'),
+  description = 'Add findings_count column to workflow_runs';
+```
+
+The final `UPDATE schema_versions` statement is required in every SQL migration file — it is the marker that the migration has completed. The runner treats the absence of this statement as a file-format error.
+
+SQL migration files are free to use `IF NOT EXISTS` clauses and similar idempotent constructs for defensive programming, but they are not required to. The `schema_versions` table guarantees that each migration runs at most once, so idempotency is a safety net, not a primary requirement.
+
+**TypeScript migration files** export a default function with a specific signature:
+
+```typescript
+// 006_backfill_scope_field.ts
+import type { Database } from 'better-sqlite3';
+
+export default function migrate(db: Database): void {
+  // Read rows that need the backfill
+  const rows = db.prepare(`
+    SELECT id, node_name FROM workflow_events WHERE scope IS NULL
+  `).all() as { id: number; node_name: string }[];
+
+  // Transform and write back
+  const update = db.prepare(`UPDATE workflow_events SET scope = ? WHERE id = ?`);
+  for (const row of rows) {
+    const scope = inferScopeFromNodeName(row.node_name);
+    update.run(scope, row.id);
+  }
+
+  // Update the version table
+  db.prepare(`
+    UPDATE schema_versions SET
+      version = 6,
+      applied_at = datetime('now'),
+      description = 'Backfill scope field in workflow_events from node_name'
+  `).run();
+}
+
+function inferScopeFromNodeName(name: string): string | null {
+  // ... logic ...
+}
+```
+
+The function receives a live database connection that is already inside a transaction (see §7.7), performs whatever operations are needed, and updates `schema_versions` at the end. The runner calls this function once per migration and treats exceptions as migration failures.
+
+TypeScript migrations should be used sparingly. If a migration can be expressed in SQL, it should be — SQL files are simpler to review and to debug. TypeScript is the escape hatch for cases where SQL alone is insufficient: data backfills that require parsing or computation, cross-row transformations that would require complex SQL, or migrations that need to interact with the filesystem (for example, renaming a value store file when a schema field name changes).
+
+#### 7.6 The Migration Runner
+
+At Plurics startup, after opening each SQLite database and before any other database access, the migration runner performs the following sequence:
+
+1. **Check for `schema_versions` table.** If the table does not exist, the database is either brand new or is in the pre-migration-system era. Handle according to §7.8.
+2. **Read the current version.** Query `SELECT version FROM schema_versions` to get the single row. If there are zero rows (corruption, but theoretically possible), treat as if the version were 0 and start from migration `001`. If there are multiple rows (impossible in a well-maintained database), fail with a clear error.
+3. **Enumerate available migrations.** Read the migrations directory for this database and list all files matching the naming convention. Sort them lexicographically (which, because of zero-padding, is equivalent to sorting by version number).
+4. **Determine which migrations to run.** Filter the list to keep only files whose version number is greater than the current version. These are the migrations that need to run.
+5. **Validate the sequence.** Check that the versions to run form a contiguous sequence starting at `currentVersion + 1`. If there is a gap (for example, the database is at version 3 and the directory contains versions 4 and 6 but not 5), fail with a clear error. Gaps indicate that the developer committing migration `006` forgot `005`, and running out of order would produce undefined results.
+6. **Execute the migrations in order.** For each migration, open a transaction, execute the SQL or call the TypeScript function, verify that `schema_versions` was updated to the expected version, and commit the transaction. If any step fails, rollback the transaction and abort the runner.
+7. **Report results.** Log each successfully-applied migration. If any migration failed, report the failed migration with the full error message and the database version at which processing stopped. The server does not start if migrations failed — running the application against an incompletely-migrated database would be unsafe.
+
+After all migrations succeed, the database is at the expected version and the server proceeds with normal startup.
+
+The runner is deliberately conservative: it never skips migrations, never reorders them, never modifies them. A migration that has been applied once cannot be re-applied and cannot be undone. If a migration needs to be fixed after it has been released, the fix is a new forward migration, not an edit to the existing file.
+
+#### 7.7 Transactional Safety
+
+Each migration runs in a single SQLite transaction. SQLite supports transactions around DDL statements (unlike some other databases where DDL is auto-committed), so the following behavior is guaranteed:
+
+- If a migration's SQL or TypeScript raises an error mid-execution, the transaction is rolled back and the database is left exactly as it was before the migration started.
+- If the migration completes successfully and the transaction commits, the database is advanced to the new version atomically. There is no intermediate state visible to other processes.
+- If the server crashes during a migration (hardware failure, OS kill, power loss), SQLite's WAL mode recovers the database on the next open, and the failed migration's transaction is rolled back as part of recovery. The database is left at the previous version.
+
+The transactional guarantee means that a failed migration does not leave the database in a broken state. The user can fix the migration file, restart Plurics, and the runner will retry it from a clean starting point. This is a significant improvement over the current inline approach, where a failed `ALTER TABLE` could leave the schema in a partially-migrated state that required manual cleanup.
+
+There is one important caveat: TypeScript migrations can have side effects outside the database (filesystem writes, network calls, etc.) that are not captured by the transaction. A TypeScript migration that, say, renames files in the value store directory and then fails at the database update step has committed the filesystem changes but rolled back the schema change. For this reason, TypeScript migrations that modify external state should be written with extreme care — ideally, they should make the database change first and perform external operations only after the commit, so that a failure at the external step can be manually reconciled without schema damage.
+
+#### 7.8 Transition from the Current State
+
+Plurics today uses the pre-migration-system approach: the init code contains inline `CREATE TABLE IF NOT EXISTS` statements and ad-hoc `ALTER TABLE` handling for the v1→v2 transition of `registry.db`. Introducing the new migration system requires a one-time transition that brings existing user databases into the new system without losing data.
+
+The transition is handled by the runner's "first encounter" logic:
+
+1. **Detect the state.** When the runner opens a database, it checks for the existence of the `schema_versions` table. If the table exists, the database is already in the new system and proceeds normally (§7.6). If it does not exist, the database is from the pre-migration era and needs to be initialized into the system.
+
+2. **Determine the current effective version.** The runner inspects the tables, columns, and indexes currently present in the database to determine which state it is in. This is feature detection: for each known migration version, the runner has a small predicate that returns true if the database matches the schema at that version. The predicates are ordered — version 4's predicate checks for columns introduced by migration 004, etc. The runner finds the highest version whose predicate matches and treats that as the current effective version.
+
+3. **Create and populate `schema_versions`.** The runner creates the `schema_versions` table and inserts a row with the determined effective version, a current timestamp, and a description like "adopted from pre-migration-system state". From this point forward, the database is in the new system.
+
+4. **Continue with normal migration.** After the initialization, the runner proceeds as in §7.6 with the database now at the detected version. If new migrations exist beyond this version (for example, the pre-migration database is at the equivalent of version 3 and the current Plurics release has migrations up to version 6), those migrations will be applied normally.
+
+The feature detection in step 2 is necessarily specific to the current state of the schemas and must be written carefully. The initial version of the runner hard-codes the predicates for all migrations that exist at the time of the transition — this is the cost of introducing the system retroactively. After the transition, new migrations do not need predicates because they are always applied via the normal mechanism.
+
+For the initial introduction of this system, the predicates to write are:
+
+- **`plurics.db` pre-system versions**: whichever states the database may have been in during Plurics' development so far. The runner writes predicates for each, finds the match, and stamps the corresponding version in `schema_versions`.
+- **`registry.db` pre-system versions**: same, with special attention to the v1 → v2 transition that introduced the `converters` table. The runner distinguishes v1 (no `converters` table) from v2 (has `converters` table).
+
+After this one-time transition, the system is self-maintaining: every future schema change is a new migration file, the runner executes it on upgrade, and the `schema_versions` table tracks the state with no ambiguity.
+
+#### 7.9 Forward-Only Policy
+
+Migrations are forward-only. There are no "down migrations" for rolling back schema changes. Once a migration has been applied, the only way to undo its effects is to write a new forward migration that reverses them.
+
+This is a deliberate choice and matches the practice of mature migration frameworks (Flyway, Sqitch, some Alembic configurations). Down migrations sound useful but in practice they are rarely correct — reversing a destructive change is often impossible (you cannot un-delete a dropped column that held unique data) and rarely used (in production, problems are fixed forward, not backward). The overhead of writing and maintaining down migrations for every forward migration is not justified by the rare case where one would actually be used.
+
+For developers who want to experiment with a migration without committing to it permanently, the workflow is:
+
+1. Write the migration on a branch.
+2. Test it by running Plurics against a copy of a representative database (dev DB, or a backup of the real DB).
+3. If the migration is wrong, discard the branch and write a new version.
+4. Only commit the migration once it is verified to work correctly.
+
+Once a migration is merged and released, it cannot be modified — doing so would break installations that have already applied the old version of the file. Fixing a bad migration after release is done via a new forward migration with a higher version number that corrects the issues introduced by the earlier one.
+
+#### 7.10 Migration Testing
+
+Every migration should have at least one automated test that verifies it produces the expected schema change. The test pattern is:
+
+1. Create an in-memory SQLite database.
+2. Apply all migrations up to version `N-1` using the runner.
+3. Apply migration `N` specifically.
+4. Verify that the resulting schema matches the expected state by querying `sqlite_master`, `PRAGMA table_info`, and so on.
+5. For data migrations (typically TypeScript), additionally populate the pre-migration state with test data, run the migration, and verify that the data was transformed correctly.
+
+Tests for migrations live alongside the migrator code, in `packages/server/src/db/migrations/__tests__/` or similar. They use the same test infrastructure as the rest of the server tests. A migration without a test is a migration that nobody has verified — it works until it doesn't.
+
+#### 7.11 Migrations Across Databases
+
+The two databases (`plurics.db` and `registry.db`) are migrated independently. The runner is invoked twice at startup, once for each database, with the appropriate migrations directory. Migrations in one database cannot reference migrations in the other — they are isolated namespaces.
+
+Coordination between cross-database schema changes (for example, introducing a feature that requires new tables in both databases) is handled by releasing both sets of migrations in the same Plurics version. The two sets are applied as part of the same startup sequence, so the user sees them happen together even though they are technically independent operations.
+
+There is one subtle case: if a feature requires data from one database to populate a new table in the other, the migration that performs this work must be a TypeScript migration (SQL cannot read cross-database) and must be in the database receiving the data. The migration opens a connection to the other database, reads the required data, and populates the new table. Testing such a migration requires setting up both databases — more work than single-database migrations, but manageable.
 
 ## 8. Backup and Disaster Recovery
 
@@ -711,7 +870,7 @@ This section is a cross-reference index for where the persistence subsystem touc
 - Seed tool loading at first startup (after Wave 1 of seed tools is written)
 
 **Pending separate implementation:**
-- The migration runner and `migrations/` directory infrastructure. The current codebase likely creates schemas via initialization code rather than via versioned migrations. This works fine for v0.x but should be migrated to the file-based approach before any breaking schema change.
+- The migration runner, the `migrations/` directory infrastructure, and the one-time transition from the current inline init code to the file-based migration system. The full specification is in §7; this is the implementation work that brings the spec to life. The initial batch of migration files must cover both `plurics.db` and `registry.db` current states, with feature-detection predicates in the runner for the one-time transition step. Estimated effort: 3-5 days for the runner and initial migration files, plus 1-2 days for tests.
 - The `workflow_findings` table and its automatic population. May be partially implemented; verify.
 - Retention policy enforcement (the periodic background task that prunes value store entries and aggregates old events).
 - Disaster recovery mode (the platform DB rebuild from run directories).

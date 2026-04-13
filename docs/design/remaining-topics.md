@@ -92,7 +92,7 @@ Questions raised in design documents that have not been answered. Each requires 
 
 ### 2.3 Persistence
 
-**Q7. Database migration strategy.** The registry DB migrated from schema v1 to v2 (added `converters` table) using an inline `ALTER TABLE` approach. As the schema evolves further, should Plurics adopt a migration framework (e.g., numbered SQL files in a `migrations/` directory), or continue with inline migration code? Source: `persistence.md` §6.1.
+**Q7. Database migration strategy.** ~~Resolved — see commit applying `docs/q7.patch.md`.~~ Plurics adopts a hybrid SQL + TypeScript forward-only migration system. Migrations are numbered files in `packages/server/src/db/migrations/{plurics,registry}/`, executed by a `migrator.ts` runner at startup, coordinated through a `schema_versions` table in each database. A one-time transition step brings existing user databases into the new system via feature-detection predicates. Full specification in `persistence.md` §7. No longer open.
 
 **Q8. Run directory retention policy.** The design doc mentions 7-day default retention for run-level values, but no cleanup mechanism is implemented. Who deletes old runs? A cron job? A startup sweep? A manual command? Source: `node-runtimes.md` §5.3.
 
